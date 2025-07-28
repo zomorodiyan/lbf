@@ -187,6 +187,29 @@ public:
             const label maxLocalSearch
         );
 
+        //- Update the deposition field using a moving Gaussian heat source
+        //  Uses only the necessary parameters for a simple Gaussian profile
+        void updateGaussianDeposition
+        (
+            const volScalarField& alphaFiltered,
+            const word& laserName,
+            const vector& currentLaserPosition,
+            const scalar currentLaserPower,
+            const scalar laserRadius
+        );
+
+        // Getter for laserNames_
+        const wordList& laserNames() const { return laserNames_; }
+
+        // Getter for laserDicts_
+        const PtrList<dictionary>& laserDicts() const { return laserDicts_; }
+
+        // Getter for timeVsLaserPosition_
+        const PtrList<interpolationTable<vector>>& timeVsLaserPosition() const { return timeVsLaserPosition_; }
+
+        // Getter for timeVsLaserPower_
+        const PtrList<interpolationTable<scalar>>& timeVsLaserPower() const { return timeVsLaserPower_; }
+
 };
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //

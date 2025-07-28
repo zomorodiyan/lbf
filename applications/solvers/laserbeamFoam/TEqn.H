@@ -56,7 +56,7 @@
           //- (tau && gradU) // Viscous dissipation
          ==
             fvModels.source(rhoCp,T)
-          + laser.deposition()
+          + laser.deposition() // Gaussian heat source
           - Qv*mag(gradAlpha)*thermalDamper
           - TRHS
         );

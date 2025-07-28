@@ -189,10 +189,61 @@ int main(int argc, char *argv[])
             #include "updateProps.H"
 
             // Update the laser deposition field
-            laser.updateDeposition
-            (
-                alpha_filtered, n_filtered, electrical_resistivity
-            );
+            // laser.updateDeposition
+            // (
+            //     alpha_filtered, n_filtered, electrical_resistivity
+            // );
+
+            // --- Use Gaussian heat source instead ---
+            {
+                const scalar time = runTime.value();
+                forAll(laser.laserNames(), laserI)
+                {
+                    const word& laserName = laser.laserNames()[laserI];
+                    vector currentLaserPosition = laser.timeVsLaserPosition()[laserI](time);
+                    scalar currentLaserPower = laser.timeVsLaserPower()[laserI](time);
+
+                    const dictionary& dict = laser.laserDicts()[laserI];
+                    scalar laserRadius = 0.0;
+                    if (dict.found("HS_a"))
+                    {
+                        laserRadius = readScalar(dict.lookup("HS_a"));
+                    }
+                    else if (dict.found("laserRadius"))
+                    {
+                        laserRadius = readScalar(dict.lookup("laserRadius"));
+                    }
+                    else
+                    {
+                        FatalErrorInFunction
+                            << "The laser radius should be specified via 'laserRadius' or 'HS_a'"
+                            << exit(FatalError);
+                    }
+
+                    // --- Add parameter validation and debug output ---
+                    if (laserRadius <= SMALL || currentLaserPower <= SMALL)
+                    {
+                        FatalErrorInFunction
+                            << "Invalid laser parameters in solver: "
+                            << "laserRadius=" << laserRadius << ", "
+                            << "currentLaserPower=" << currentLaserPower << nl
+                            << "Check your LaserProperties dictionary!" << exit(FatalError);
+                    }
+                    Info << "Laser " << laserName
+                         << ": radius=" << laserRadius
+                         << ", power=" << currentLaserPower
+                         << ", position=" << currentLaserPosition << endl;
+
+                    laser.updateGaussianDeposition
+                    (
+                        alpha_filtered,
+                        laserName,
+                        currentLaserPosition,
+                        currentLaserPower,
+                        laserRadius
+                    );
+                }
+            }
 
             turbulence.correctPhasePhi();
 
