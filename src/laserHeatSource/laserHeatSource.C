@@ -305,123 +305,64 @@ void Foam::laserHeatSource::updateGaussianDeposition
     const scalar laserRadius
 )
 {
-    // Reset deposition field
-    deposition_ *= 0.0;
+    // Parameters
+    const scalar laserHeight = 0.00015; // Set this from dictionary if needed
+    const scalar tiltAngleDeg = 5.0;
+    const scalar tiltAngleRad = tiltAngleDeg * constant::mathematical::pi / 180.0;
 
+    // Direction vector: 5 deg from y toward x
+    vector axisDir(Foam::sin(tiltAngleRad), Foam::cos(tiltAngleRad), 0.0);
+    axisDir /= mag(axisDir); // Normalize
+
+    // Cylinder center: start at currentLaserPosition, extend along axisDir
     const fvMesh& mesh = deposition_.mesh();
     const vectorField& cellCenters = mesh.C();
-    const scalarField& alphaFilteredI = alphaFiltered;
 
-    // Find laser dictionary index
-    label laserI = -1;
-    forAll(laserNames_, i)
-    {
-        if (laserNames_[i] == laserName)
-        {
-            laserI = i;
-            break;
-        }
-    }
-    if (laserI == -1)
-    {
-        FatalErrorInFunction << "Laser name not found: " << laserName << exit(FatalError);
-    }
-    const dictionary& dict = laserDicts_[laserI];
-
-    // Read V_incident and laserHeight from dictionary
-    vector V_incident(dict.lookup("V_incident"));
-    scalar laserHeight = dict.lookupOrDefault<scalar>("laserHeight", laserRadius); // fallback if not present
-
-    // --- Add parameter validation to avoid floating point exceptions ---
-    if (laserRadius <= SMALL || laserHeight <= SMALL || currentLaserPower <= SMALL)
-    {
-        FatalErrorInFunction
-            << "Invalid laser parameters: "
-            << "laserRadius=" << laserRadius << ", "
-            << "laserHeight=" << laserHeight << ", "
-            << "currentLaserPower=" << currentLaserPower << nl
-            << "Check your LaserProperties dictionary!" << exit(FatalError);
-    }
-
-    // Normalize direction
-    vector beamDir = V_incident/mag(V_incident);
-
-    // The center of the Gaussian is at the middle of the segment
-    vector gaussianCenter = currentLaserPosition + 0.5 * laserHeight * beamDir;
-
-    // 3D Gaussian normalization factor
+    // Gaussian normalization (total power over cylinder volume)
     const scalar pi = constant::mathematical::pi;
-    const scalar norm = currentLaserPower / (Foam::pow(pi, 1.5) * laserRadius * laserRadius * laserHeight);
+    const scalar cylinderVolume = pi * Foam::pow(laserRadius, 2.0) * laserHeight;
+    const scalar gaussianNorm = currentLaserPower / cylinderVolume;
+
+    deposition_ *= 0.0;
 
     forAll(cellCenters, celli)
     {
-        // Only deposit in cells with sufficient material (alphaFiltered > 0.5)
-        if (alphaFilteredI[celli] > 0.5)
+        if (alphaFiltered[celli] > 0.5)
         {
-            // Vector from Gaussian center to cell
-            vector d = cellCenters[celli] - gaussianCenter;
+            // Vector from start to cell
+            vector d = cellCenters[celli] - currentLaserPosition;
 
-            // Axial distance (along beam direction, centered at middle of segment)
-            scalar axial = (d & beamDir);
+            // Axial distance along cylinder axis
+            scalar axial = d & axisDir;
 
-            // Radial distance (perpendicular to beam direction)
-            scalar radial2 = magSqr(d - axial*beamDir);
-
-            // Only deposit within the segment [0, laserHeight] along beamDir starting from currentLaserPosition
-            scalar proj = (cellCenters[celli] - currentLaserPosition) & beamDir;
-            if (proj >= 0 && proj <= laserHeight)
+            // Only deposit within [0, laserHeight] along axis
+            if (axial >= 0 && axial <= laserHeight)
             {
-                // 3D Gaussian profile
-                scalar Q = norm
-                    * Foam::exp(-radial2 / Foam::pow(laserRadius, 2.0))
-                    * Foam::exp(-Foam::pow(axial, 2.0) / Foam::pow(laserHeight, 2.0));
+                // Radial distance from axis
+                vector radialVec = d - axial * axisDir;
+                scalar radial2 = magSqr(radialVec);
 
-                deposition_[celli] += Q;
+                if (radial2 <= Foam::pow(laserRadius, 2.0))
+                {
+                    // Gaussian profile in radial direction
+                    scalar Q = gaussianNorm * Foam::exp(-radial2 / Foam::pow(laserRadius, 2.0));
+                    deposition_[celli] = Q;
+                }
+                else
+                {
+                    deposition_[celli] = 0.0;
+                }
+            }
+            else
+            {
+                deposition_[celli] = 0.0;
             }
         }
-    }
-
-    deposition_.correctBoundaryConditions();
-
-    Info << "Total 3D Gaussian Q deposited this timestep: "
-         << fvc::domainIntegrate(deposition_).value() << endl;
-
-    Info << "deposition_ min: " << gMin(deposition_) << " max: " << gMax(deposition_) << endl;
-    Info << "Gaussian norm: " << norm
-         << " | laserRadius: " << laserRadius
-         << " | laserHeight: " << laserHeight
-         << " | currentLaserPower: " << currentLaserPower << endl;
-
-    if (norm > 1e10)
-    {
-        WarningInFunction
-            << "Gaussian normalization factor is extremely large: " << norm << nl
-            << "This is likely due to very small laserRadius or laserHeight." << nl
-            << "Check your LaserProperties dictionary for physical values." << endl;
-    }
-
-    if (fvc::domainIntegrate(deposition_).value() < 1e-12)
-    {
-        WarningInFunction
-            << "Total Gaussian Q deposited is extremely small (" << fvc::domainIntegrate(deposition_).value() << ")"
-            << " compared to the simulation time scale (1e-8 s)." << nl
-            << "Check if your laser power, spot size, or time step are physically reasonable." << endl;
-    }
-
-    // --- Additional debug: check for NaN or Inf in deposition_ ---
-    label nanCount = 0, infCount = 0;
-    forAll(deposition_, celli)
-    {
-        if (Foam::isnan(deposition_[celli]))
+        else
         {
-            nanCount++;
-        }
-        if (Foam::isinf(deposition_[celli]))
-        {
-            infCount++;
+            deposition_[celli] = 0.0;
         }
     }
-    Info << "deposition_ NaN count: " << nanCount << " | Inf count: " << infCount << endl;
 }
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
