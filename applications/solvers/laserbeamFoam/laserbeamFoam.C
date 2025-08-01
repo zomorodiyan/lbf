@@ -80,6 +80,7 @@ int main(int argc, char *argv[])
     // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
     Info<< "\nStarting time loop\n" << endl;
 
+    // Use PIMPLE loop but skip momentum/pressure for energy-only simulation
     while (pimple.run(runTime))
     {
         Info << "DEBUG: Start of time loop" << endl;
@@ -103,100 +104,101 @@ int main(int argc, char *argv[])
             Info << "DEBUG: After setDeltaT.H" << endl;
         }
 
-        fvModels.preUpdateMesh();
-        Info << "DEBUG: After fvModels.preUpdateMesh()" << endl;
+        // Comment out mesh motion and topology changes for energy-only simulation
+        // fvModels.preUpdateMesh();
+        // Info << "DEBUG: After fvModels.preUpdateMesh()" << endl;
 
-        // Store divU from the previous mesh so that it can be mapped
-        // and used in correctPhi to ensure the corrected phi has the
-        // same divergence
-        tmp<volScalarField> divU;
+        // // Store divU from the previous mesh so that it can be mapped
+        // // and used in correctPhi to ensure the corrected phi has the
+        // // same divergence
+        // tmp<volScalarField> divU;
 
-        if
-        (
-            correctPhi
-         && !isType<twoPhaseChangeModels::noPhaseChange>(phaseChange)
-         && mesh.topoChanged()
-        )
-        {
-            // Construct and register divU for correctPhi
-            divU = new volScalarField
-            (
-                "divU0",
-                fvc::div(fvc::absolute(phi, U))
-            );
-        }
+        // if
+        // (
+        //     correctPhi
+        //  && !isType<twoPhaseChangeModels::noPhaseChange>(phaseChange)
+        //  && mesh.topoChanged()
+        // )
+        // {
+        //     // Construct and register divU for correctPhi
+        //     divU = new volScalarField
+        //     (
+        //         "divU0",
+        //         fvc::div(fvc::absolute(phi, U))
+        //     );
+        // }
 
-        // Update the mesh for topology change, mesh to mesh mapping
-        bool topoChanged = mesh.update();
+        // // Update the mesh for topology change, mesh to mesh mapping
+        // bool topoChanged = mesh.update();
 
-        // Do not apply previous time-step mesh compression flux
-        // if the mesh topology changed
-        if (topoChanged)
-        {
-            talphaPhi1Corr0.clear();
-        }
+        // // Do not apply previous time-step mesh compression flux
+        // // if the mesh topology changed
+        // if (topoChanged)
+        // {
+        //     talphaPhi1Corr0.clear();
+        // }
 
         runTime++;
 
         Info<< "Time = " << runTime.userTimeName() << nl << endl;
 
-        // --- Pressure-velocity PIMPLE corrector loop
-        while (pimple.loop())
-        {
-            Info << "DEBUG: Start of PIMPLE loop" << endl;
-            if (pimple.firstPimpleIter() || moveMeshOuterCorrectors)
-            {
-                if
-                (
-                    correctPhi
-                 && !isType<twoPhaseChangeModels::noPhaseChange>(phaseChange)
-                 && !divU.valid()
-                )
-                {
-                    // Construct and register divU for correctPhi
-                    divU = new volScalarField
-                    (
-                        "divU0",
-                        fvc::div(fvc::absolute(phi, U))
-                    );
-                }
+        // --- Energy-only simulation: Comment out PIMPLE loop for momentum/pressure ---
+        // while (pimple.loop())
+        // {
+        //     Info << "DEBUG: Start of PIMPLE loop" << endl;
+        //     if (pimple.firstPimpleIter() || moveMeshOuterCorrectors)
+        //     {
+        //         if
+        //         (
+        //             correctPhi
+        //          && !isType<twoPhaseChangeModels::noPhaseChange>(phaseChange)
+        //          && !divU.valid()
+        //         )
+        //         {
+        //             // Construct and register divU for correctPhi
+        //             divU = new volScalarField
+        //             (
+        //                 "divU0",
+        //                 fvc::div(fvc::absolute(phi, U))
+        //             );
+        //         }
 
-                // Move the mesh
-                mesh.move();
+        //         // Move the mesh
+        //         mesh.move();
 
-                if (mesh.changing())
-                {
-                    gh = (g & mesh.C()) - ghRef;
-                    ghf = (g & mesh.Cf()) - ghRef;
+        //         if (mesh.changing())
+        //         {
+        //             gh = (g & mesh.C()) - ghRef;
+        //             ghf = (g & mesh.Cf()) - ghRef;
 
-                    MRF.update();
+        //             MRF.update();
 
-                    if (correctPhi)
-                    {
-                        #include "correctPhi.H"
+        //             if (correctPhi)
+        //             {
+        //                 #include "correctPhi.H"
 
-                        // Update rhoPhi
-                        rhoPhi = fvc::interpolate(rho)*phi;
-                    }
+        //                 // Update rhoPhi
+        //                 rhoPhi = fvc::interpolate(rho)*phi;
+        //             }
 
-                    mixture.correct();
+        //             mixture.correct();
 
-                    if (checkMeshCourantNo)
-                    {
-                        #include "meshCourantNo.H"
-                    }
-                }
+        //             if (checkMeshCourantNo)
+        //             {
+        //                 #include "meshCourantNo.H"
+        //             }
+        //         }
 
-                divU.clear();
-            }
+        //         divU.clear();
+        //     }
 
-            fvModels.correct();
-            Info << "DEBUG: After fvModels.correct()" << endl;
+        //     fvModels.correct();
+        //     Info << "DEBUG: After fvModels.correct()" << endl;
 
-            #include "alphaControls.H"
-            Info << "DEBUG: After alphaControls.H" << endl;
-            #include "alphaEqnSubCycle.H"
-            Info << "DEBUG: After alphaEqnSubCycle.H" << endl;
+        //     #include "alphaControls.H"
+        //     Info << "DEBUG: After alphaControls.H" << endl;
+        //     #include "alphaEqnSubCycle.H"
+        //     Info << "DEBUG: After alphaEqnSubCycle.H" << endl;
 
             #include "updateProps.H"
             Info << "DEBUG: After updateProps.H" << endl;
@@ -273,33 +275,35 @@ int main(int argc, char *argv[])
             Info << "U min: " << gMin(U) << " max: " << gMax(U) << endl;
             Info << "p min: " << gMin(p) << " max: " << gMax(p) << endl;
 
-            turbulence.correctPhasePhi();
-            Info << "DEBUG: After turbulence.correctPhasePhi()" << endl;
+            // Comment out turbulence and mixture corrections for energy-only simulation
+            // turbulence.correctPhasePhi();
+            // Info << "DEBUG: After turbulence.correctPhasePhi()" << endl;
 
-            mixture.correct();
-            Info << "DEBUG: After mixture.correct()" << endl;
+            // mixture.correct();
+            // Info << "DEBUG: After mixture.correct()" << endl;
 
-            #include "UEqn.H"
-            Info << "DEBUG: After UEqn.H" << endl;
+            // Comment out momentum equation for energy-only simulation
+            // #include "UEqn.H"
+            // Info << "DEBUG: After UEqn.H" << endl;
 
             #include "TEqn.H"
             Info << "DEBUG: After TEqn.H" << endl;
 
-            // --- Pressure corrector loop
-            while (pimple.correct())
-            {
-                Info << "DEBUG: Start of pressure corrector loop" << endl;
-                #include "pEqn.H"
-                Info << "DEBUG: After pEqn.H" << endl;
-            }
+            // --- Comment out pressure corrector loop for energy-only simulation ---
+            // while (pimple.correct())
+            // {
+            //     Info << "DEBUG: Start of pressure corrector loop" << endl;
+            //     #include "pEqn.H"
+            //     Info << "DEBUG: After pEqn.H" << endl;
+            // }
 
-            if (pimple.turbCorr())
-            {
-                turbulence.correct();
-                Info << "DEBUG: After turbulence.correct() (turbCorr)" << endl;
-            }
-            Info << "DEBUG: End of PIMPLE loop" << endl;
-        }
+            // if (pimple.turbCorr())
+            // {
+            //     turbulence.correct();
+            //     Info << "DEBUG: After turbulence.correct() (turbCorr)" << endl;
+            // }
+            // Info << "DEBUG: End of PIMPLE loop" << endl;
+        // }
 
         // Check the cells that have melted
         Info << "DEBUG: Before meltHistory update" << endl;
