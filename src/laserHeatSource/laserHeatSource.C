@@ -163,7 +163,6 @@ laserHeatSource::laserHeatSource
         forAll(laserEntries, laserI)
         {
             laserNames_[laserI] = laserEntries[laserI].keyword();
-            Info<< "Reading laser " << laserNames_[laserI] << endl;
 
             laserDicts_.set(laserI, new dictionary(laserEntries[laserI].dict()));
 
@@ -186,8 +185,6 @@ laserHeatSource::laserHeatSource
             );
         }
 
-        // Check that a single laser is not also defined
-
         if (found("timeVsLaserPosition"))
         {
             FatalErrorInFunction
@@ -204,8 +201,6 @@ laserHeatSource::laserHeatSource
     }
     else
     {
-        // There is no lists of lasers, just one
-
         laserNames_.setSize(1);
         laserDicts_.setSize(1);
         timeVsLaserPosition_.setSize(1);
@@ -213,7 +208,6 @@ laserHeatSource::laserHeatSource
 
         laserNames_[0] = "laser0";
 
-        // Copy the main dict
         laserDicts_.set(0, new dictionary(*this));
 
         timeVsLaserPosition_.set
@@ -229,14 +223,7 @@ laserHeatSource::laserHeatSource
         );
     }
 
-    // Update laserBoundary
     laserBoundary_ = fvc::average(laserBoundary_);
-
-    if (debug)
-    {
-        errorTrack_.writeOpt() = IOobject::AUTO_WRITE;
-        rayNumber_.writeOpt() = IOobject::AUTO_WRITE;
-    }
 
     // Give errors if the old input format is found
 
@@ -305,48 +292,36 @@ void Foam::laserHeatSource::updateGaussianDeposition
     const scalar laserRadius
 )
 {
-    // Parameters
-    const scalar laserHeight = 0.00015; // Set this from dictionary if needed
+    const scalar laserHeight = 0.00015;
     const scalar tiltAngleDeg = 5.0;
     const scalar tiltAngleRad = tiltAngleDeg * constant::mathematical::pi / 180.0;
 
-    // Direction vector: 5 deg from y toward x
     vector axisDir(Foam::sin(tiltAngleRad), Foam::cos(tiltAngleRad), 0.0);
-    axisDir /= mag(axisDir); // Normalize
+    axisDir /= mag(axisDir);
 
-    // Cylinder center: start at currentLaserPosition, extend along axisDir
     const fvMesh& mesh = deposition_.mesh();
     const vectorField& cellCenters = mesh.C();
 
-    // Gaussian normalization (total power over cylinder volume)
     const scalar pi = constant::mathematical::pi;
     const scalar cylinderVolume = pi * Foam::pow(laserRadius, 2.0) * laserHeight;
     const scalar gaussianNorm = currentLaserPower / cylinderVolume;
 
-    // --- New: effectiveRadius for cutoff ---
     const scalar effectiveRadius = 1.5 * laserRadius;
 
     deposition_ *= 0.0;
 
     forAll(cellCenters, celli)
     {
-        // Vector from start to cell
         vector d = cellCenters[celli] - currentLaserPosition;
-
-        // Axial distance along cylinder axis
         scalar axial = d & axisDir;
 
-        // Only deposit within [0, laserHeight] along axis
         if (axial >= 0 && axial <= laserHeight)
         {
-            // Radial distance from axis
             vector radialVec = d - axial * axisDir;
             scalar radial2 = magSqr(radialVec);
 
-            // --- Use effectiveRadius for cutoff ---
             if (radial2 <= Foam::pow(effectiveRadius, 2.0))
             {
-                // Gaussian profile in radial direction
                 scalar Q = gaussianNorm * Foam::exp(-radial2 / Foam::pow(laserRadius, 2.0));
                 deposition_[celli] = Q;
             }
