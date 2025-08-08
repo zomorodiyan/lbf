@@ -148,7 +148,8 @@ laserHeatSource::laserHeatSource
     laserNames_(0),
     laserDicts_(0),
     timeVsLaserPosition_(0),
-    timeVsLaserPower_(0)
+    timeVsLaserPower_(0),
+    effectiveRadius_(lookupOrDefault<scalar>("effectiveRadius", 1e-3)) // <-- add this line
 {
     // Initialise the laser power and position
     if (found("lasers"))
@@ -306,8 +307,6 @@ void Foam::laserHeatSource::updateGaussianDeposition
     const scalar cylinderVolume = pi * Foam::pow(laserRadius, 2.0) * laserHeight;
     const scalar gaussianNorm = currentLaserPower / cylinderVolume;
 
-    const scalar effectiveRadius = 1.5 * laserRadius;
-
     deposition_ *= 0.0;
 
     forAll(cellCenters, celli)
@@ -320,7 +319,8 @@ void Foam::laserHeatSource::updateGaussianDeposition
             vector radialVec = d - axial * axisDir;
             scalar radial2 = magSqr(radialVec);
 
-            if (radial2 <= Foam::pow(effectiveRadius, 2.0))
+            // Use effectiveRadius_ as the cutoff, independent of laserRadius
+            if (radial2 <= Foam::pow(effectiveRadius_, 2.0))
             {
                 scalar Q = gaussianNorm * Foam::exp(-radial2 / Foam::pow(laserRadius, 2.0));
                 deposition_[celli] = Q;
@@ -341,4 +341,5 @@ void Foam::laserHeatSource::updateGaussianDeposition
 
 } // End namespace Foam
 
+// ************************************************************************* //
 // ************************************************************************* //

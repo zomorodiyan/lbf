@@ -2,7 +2,6 @@
 
 const dimensionedScalar deltaN = 1e-8/pow(average(mesh.V()), 1.0/3.0);
 
-Info<< "Reading field p_rgh\n" << endl;
 volScalarField p_rgh
 (
     IOobject
@@ -16,7 +15,6 @@ volScalarField p_rgh
     mesh
 );
 
-Info<< "Reading field U\n" << endl;
 volVectorField U
 (
     IOobject
@@ -30,7 +28,6 @@ volVectorField U
     mesh
 );
 
-Info<< "Reading field Temperature\n" << endl;
 volScalarField T
 (
     IOobject
@@ -46,7 +43,6 @@ volScalarField T
 
 #include "createPhi.H"
 
-Info<< "Reading phaseProperties\n" << endl;
 immiscibleIncompressibleTwoPhaseMixture mixture(U, phi);
 
 autoPtr<twoPhaseChangeModel> phaseChangePtr

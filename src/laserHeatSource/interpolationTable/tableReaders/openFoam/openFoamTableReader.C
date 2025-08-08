@@ -53,7 +53,9 @@ void Foam::openFoamTableReader<Type>::operator()
 #ifdef OPENFOAMESIORFOUNDATION
     fileHandler().NewIFstream(fName)()() >> data;
 #else
-    IFstream(fName)() >> data;
+    // IFstream(fName)() >> data;
+    IFstream stream(fName);
+    stream >> data;
 #endif
 }
 
@@ -69,7 +71,9 @@ void Foam::openFoamTableReader<Type>::operator()
 #ifdef OPENFOAMESIORFOUNDATION
     fileHandler().NewIFstream(fName)()() >> data;
 #else
-    IFstream(fName)() >> data;
+    // IFstream(fName)() >> data;
+    IFstream stream(fName);
+    stream >> data;
 #endif
 }
 

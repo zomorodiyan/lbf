@@ -142,10 +142,10 @@ int main(int argc, char *argv[])
             }
         }
 
-        if (mesh.objectRegistry::foundObject<volScalarField>("Q"))
-        {
-            volScalarField& Q = mesh.lookupObjectRef<volScalarField>("Q");
-        }
+        //if (mesh.objectRegistry::foundObject<volScalarField>("Q"))
+        //{
+        //    // volScalarField& Q = mesh.lookupObjectRef<volScalarField>("Q"); // unused, remove or comment out
+        //}
 
         #include "TEqn.H"
 
