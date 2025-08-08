@@ -81,9 +81,10 @@ class laserHeatSource
         volScalarField refineFlag_;
 
         //- Powder sim flag
-        //  Needed for cases with spherical particles or spurious currents will
-        //  smear out the particle interface un-physically
         const Switch powderSim_;
+
+        //- Effective radius for Gaussian deposition
+        scalar effectiveRadius_;
 
         //- List of the laser names
         wordList laserNames_;
@@ -210,6 +211,9 @@ public:
         // Getter for timeVsLaserPower_
         const PtrList<interpolationTable<scalar>>& timeVsLaserPower() const { return timeVsLaserPower_; }
 
+        // Getter for effectiveRadius_
+        scalar effectiveRadius() const { return effectiveRadius_; }
+
 };
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
@@ -219,5 +223,3 @@ public:
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 #endif
-
-// ************************************************************************* //

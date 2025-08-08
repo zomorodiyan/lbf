@@ -145,11 +145,11 @@ laserHeatSource::laserHeatSource
         dimensionedScalar("refineflag", dimensionSet(0,0,0,0,0), 0.0)
     ),
     powderSim_(lookupOrDefault<Switch>("PowderSim", false)),
+    effectiveRadius_(lookupOrDefault<scalar>("effectiveRadius", 1e-3)),
     laserNames_(0),
     laserDicts_(0),
     timeVsLaserPosition_(0),
-    timeVsLaserPower_(0),
-    effectiveRadius_(lookupOrDefault<scalar>("effectiveRadius", 1e-3)) // <-- add this line
+    timeVsLaserPower_(0)
 {
     // Initialise the laser power and position
     if (found("lasers"))
@@ -304,8 +304,9 @@ void Foam::laserHeatSource::updateGaussianDeposition
     const vectorField& cellCenters = mesh.C();
 
     const scalar pi = constant::mathematical::pi;
-    const scalar cylinderVolume = pi * Foam::pow(laserRadius, 2.0) * laserHeight;
-    const scalar gaussianNorm = currentLaserPower / cylinderVolume;
+    // Use Gaussian normalization: Power / (height * 2 * pi * sigma^2)
+    const scalar sigma2 = Foam::pow(laserRadius, 2.0);
+    const scalar gaussianNorm = currentLaserPower / (laserHeight * 2.0 * pi * sigma2);
 
     deposition_ *= 0.0;
 
@@ -322,7 +323,7 @@ void Foam::laserHeatSource::updateGaussianDeposition
             // Use effectiveRadius_ as the cutoff, independent of laserRadius
             if (radial2 <= Foam::pow(effectiveRadius_, 2.0))
             {
-                scalar Q = gaussianNorm * Foam::exp(-radial2 / Foam::pow(laserRadius, 2.0));
+                scalar Q = gaussianNorm * Foam::exp(-radial2 / (2.0 * sigma2));
                 deposition_[celli] = Q;
             }
             else
