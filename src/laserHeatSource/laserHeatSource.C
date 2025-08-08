@@ -323,35 +323,32 @@ void Foam::laserHeatSource::updateGaussianDeposition
     const scalar cylinderVolume = pi * Foam::pow(laserRadius, 2.0) * laserHeight;
     const scalar gaussianNorm = currentLaserPower / cylinderVolume;
 
+    // --- New: effectiveRadius for cutoff ---
+    const scalar effectiveRadius = 1.5 * laserRadius;
+
     deposition_ *= 0.0;
 
     forAll(cellCenters, celli)
     {
-        if (alphaFiltered[celli] > 0.5)
+        // Vector from start to cell
+        vector d = cellCenters[celli] - currentLaserPosition;
+
+        // Axial distance along cylinder axis
+        scalar axial = d & axisDir;
+
+        // Only deposit within [0, laserHeight] along axis
+        if (axial >= 0 && axial <= laserHeight)
         {
-            // Vector from start to cell
-            vector d = cellCenters[celli] - currentLaserPosition;
+            // Radial distance from axis
+            vector radialVec = d - axial * axisDir;
+            scalar radial2 = magSqr(radialVec);
 
-            // Axial distance along cylinder axis
-            scalar axial = d & axisDir;
-
-            // Only deposit within [0, laserHeight] along axis
-            if (axial >= 0 && axial <= laserHeight)
+            // --- Use effectiveRadius for cutoff ---
+            if (radial2 <= Foam::pow(effectiveRadius, 2.0))
             {
-                // Radial distance from axis
-                vector radialVec = d - axial * axisDir;
-                scalar radial2 = magSqr(radialVec);
-
-                if (radial2 <= Foam::pow(laserRadius, 2.0))
-                {
-                    // Gaussian profile in radial direction
-                    scalar Q = gaussianNorm * Foam::exp(-radial2 / Foam::pow(laserRadius, 2.0));
-                    deposition_[celli] = Q;
-                }
-                else
-                {
-                    deposition_[celli] = 0.0;
-                }
+                // Gaussian profile in radial direction
+                scalar Q = gaussianNorm * Foam::exp(-radial2 / Foam::pow(laserRadius, 2.0));
+                deposition_[celli] = Q;
             }
             else
             {
