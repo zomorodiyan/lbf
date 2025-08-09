@@ -304,9 +304,9 @@ void Foam::laserHeatSource::updateGaussianDeposition
     const vectorField& cellCenters = mesh.C();
 
     const scalar pi = constant::mathematical::pi;
-    // Use Gaussian normalization: Power / (height * 2 * pi * sigma^2)
-    const scalar sigma2 = Foam::pow(laserRadius, 2.0);
-    const scalar gaussianNorm = currentLaserPower / (laserHeight * 2.0 * pi * sigma2);
+    // Normalize so that the peak (center) value integrates to the total power over the cross-section
+    // Use: Power / (pi * laserRadius^2 * laserHeight)
+    const scalar gaussianNorm = 2 * currentLaserPower / (pi * Foam::pow(laserRadius, 2.0) * laserHeight);
 
     deposition_ *= 0.0;
 
@@ -320,10 +320,9 @@ void Foam::laserHeatSource::updateGaussianDeposition
             vector radialVec = d - axial * axisDir;
             scalar radial2 = magSqr(radialVec);
 
-            // Use effectiveRadius_ as the cutoff, independent of laserRadius
             if (radial2 <= Foam::pow(effectiveRadius_, 2.0))
             {
-                scalar Q = gaussianNorm * Foam::exp(-radial2 / (2.0 * sigma2));
+                scalar Q = gaussianNorm * Foam::exp(-radial2 / Foam::pow(laserRadius, 2.0));
                 deposition_[celli] = Q;
             }
             else
