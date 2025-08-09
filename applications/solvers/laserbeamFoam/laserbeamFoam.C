@@ -78,33 +78,33 @@ int main(int argc, char *argv[])
     }
 
     // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
-    Info<< "\nStarting time loop\n" << endl;
+    // Info<< "\nStarting time loop\n" << endl;
 
     while (pimple.run(runTime))
     {
-        Info << "DEBUG: Start of time loop" << endl;
+        // Info << "DEBUG: Start of time loop" << endl;
         #include "readControls.H"
-        Info << "DEBUG: After readControls.H" << endl;
+        // Info << "DEBUG: After readControls.H" << endl;
         #include "readDyMControls.H"
-        Info << "DEBUG: After readDyMControls.H" << endl;
+        // Info << "DEBUG: After readDyMControls.H" << endl;
 
         if (LTS)
         {
             #include "setRDeltaT.H"
-            Info << "DEBUG: After setRDeltaT.H" << endl;
+            // Info << "DEBUG: After setRDeltaT.H" << endl;
         }
         else
         {
             #include "CourantNo.H"
-            Info << "DEBUG: After CourantNo.H" << endl;
+            // Info << "DEBUG: After CourantNo.H" << endl;
             #include "alphaCourantNo.H"
-            Info << "DEBUG: After alphaCourantNo.H" << endl;
+            // Info << "DEBUG: After alphaCourantNo.H" << endl;
             #include "setDeltaT.H"
-            Info << "DEBUG: After setDeltaT.H" << endl;
+            // Info << "DEBUG: After setDeltaT.H" << endl;
         }
 
         fvModels.preUpdateMesh();
-        Info << "DEBUG: After fvModels.preUpdateMesh()" << endl;
+        // Info << "DEBUG: After fvModels.preUpdateMesh()" << endl;
 
         // Store divU from the previous mesh so that it can be mapped
         // and used in correctPhi to ensure the corrected phi has the
@@ -138,12 +138,10 @@ int main(int argc, char *argv[])
 
         runTime++;
 
-        Info<< "Time = " << runTime.userTimeName() << nl << endl;
-
         // --- Pressure-velocity PIMPLE corrector loop
         while (pimple.loop())
         {
-            Info << "DEBUG: Start of PIMPLE loop" << endl;
+            // Info << "DEBUG: Start of PIMPLE loop" << endl;
             if (pimple.firstPimpleIter() || moveMeshOuterCorrectors)
             {
                 if
@@ -191,15 +189,15 @@ int main(int argc, char *argv[])
             }
 
             fvModels.correct();
-            Info << "DEBUG: After fvModels.correct()" << endl;
+            // Info << "DEBUG: After fvModels.correct()" << endl;
 
             #include "alphaControls.H"
-            Info << "DEBUG: After alphaControls.H" << endl;
+            // Info << "DEBUG: After alphaControls.H" << endl;
             #include "alphaEqnSubCycle.H"
-            Info << "DEBUG: After alphaEqnSubCycle.H" << endl;
+            // Info << "DEBUG: After alphaEqnSubCycle.H" << endl;
 
             #include "updateProps.H"
-            Info << "DEBUG: After updateProps.H" << endl;
+            // Info << "DEBUG: After updateProps.H" << endl;
 
             // Update the laser deposition field
             // laser.updateDeposition
@@ -242,10 +240,10 @@ int main(int argc, char *argv[])
                             << "currentLaserPower=" << currentLaserPower << nl
                             << "Check your LaserProperties dictionary!" << exit(FatalError);
                     }
-                    Info << "Laser " << laserName
-                         << ": radius=" << laserRadius
-                         << ", power=" << currentLaserPower
-                         << ", position=" << currentLaserPosition << endl;
+                    // Info << "Laser " << laserName
+                    //      << ": radius=" << laserRadius
+                    //      << ", power=" << currentLaserPower
+                    //      << ", position=" << currentLaserPosition << endl;
 
                     laser.updateGaussianDeposition
                     (
@@ -257,68 +255,68 @@ int main(int argc, char *argv[])
                     );
                 }
             }
-            Info << "DEBUG: After updateGaussianDeposition" << endl;
+            // Info << "DEBUG: After updateGaussianDeposition" << endl;
 
             // Fix: Only print Q if it exists in the objectRegistry
             if (mesh.objectRegistry::foundObject<volScalarField>("Q"))
             {
                 volScalarField& Q = mesh.lookupObjectRef<volScalarField>("Q");
-                Info << "Q min: " << gMin(Q) << " max: " << gMax(Q) << endl;
+                // Info << "Q min: " << gMin(Q) << " max: " << gMax(Q) << endl;
             }
             else
             {
-                Info << "Q field not found in objectRegistry." << endl;
+                // Info << "Q field not found in objectRegistry." << endl;
             }
-            Info << "T min: " << gMin(T) << " max: " << gMax(T) << endl;
-            Info << "U min: " << gMin(U) << " max: " << gMax(U) << endl;
-            Info << "p min: " << gMin(p) << " max: " << gMax(p) << endl;
+            // Info << "T min: " << gMin(T) << " max: " << gMax(T) << endl;
+            // Info << "U min: " << gMin(U) << " max: " << gMax(U) << endl;
+            // Info << "p min: " << gMin(p) << " max: " << gMax(p) << endl;
 
             turbulence.correctPhasePhi();
-            Info << "DEBUG: After turbulence.correctPhasePhi()" << endl;
+            // Info << "DEBUG: After turbulence.correctPhasePhi()" << endl;
 
             mixture.correct();
-            Info << "DEBUG: After mixture.correct()" << endl;
+            // Info << "DEBUG: After mixture.correct()" << endl;
 
             #include "UEqn.H"
-            Info << "DEBUG: After UEqn.H" << endl;
+            // Info << "DEBUG: After UEqn.H" << endl;
 
             #include "TEqn.H"
-            Info << "DEBUG: After TEqn.H" << endl;
+            // Info << "DEBUG: After TEqn.H" << endl;
 
             // --- Pressure corrector loop
             while (pimple.correct())
             {
-                Info << "DEBUG: Start of pressure corrector loop" << endl;
+                // Info << "DEBUG: Start of pressure corrector loop" << endl;
                 #include "pEqn.H"
-                Info << "DEBUG: After pEqn.H" << endl;
+                // Info << "DEBUG: After pEqn.H" << endl;
             }
 
             if (pimple.turbCorr())
             {
                 turbulence.correct();
-                Info << "DEBUG: After turbulence.correct() (turbCorr)" << endl;
+                // Info << "DEBUG: After turbulence.correct() (turbCorr)" << endl;
             }
-            Info << "DEBUG: End of PIMPLE loop" << endl;
+            // Info << "DEBUG: End of PIMPLE loop" << endl;
         }
 
         // Check the cells that have melted
-        Info << "DEBUG: Before meltHistory update" << endl;
+        // Info << "DEBUG: Before meltHistory update" << endl;
         volScalarField alphaMetal = 
             mesh.lookupObject<volScalarField>("alpha.metal");
         condition = pos(alphaMetal - 0.5) * pos(epsilon1 - 0.5);
         meltHistory += condition;
-        Info << "DEBUG: After meltHistory update" << endl;
+        // Info << "DEBUG: After meltHistory update" << endl;
 
         runTime.write();
-        Info << "DEBUG: After runTime.write()" << endl;
+        // Info << "DEBUG: After runTime.write()" << endl;
 
-        Info<< "ExecutionTime = " << runTime.elapsedCpuTime() << " s"
-            << "  ClockTime = " << runTime.elapsedClockTime() << " s"
-            << nl << endl;
-        Info << "DEBUG: End of time loop" << endl;
+        // Info<< "ExecutionTime = " << runTime.elapsedCpuTime() << " s"
+        //     << "  ClockTime = " << runTime.elapsedClockTime() << " s"
+        //     << nl << endl;
+        // Info << "DEBUG: End of time loop" << endl;
     }
 
-    Info<< "End\n" << endl;
+    // Info<< "End\n" << endl;
 
     return 0;
 }
