@@ -306,7 +306,7 @@ void Foam::laserHeatSource::updateGaussianDeposition
 )
 {
     // Parameters
-    const scalar laserHeight = 0.00015; // Set this from dictionary if needed
+    const scalar laserHeight = 0.00020; // Set this from dictionary if needed
     const scalar tiltAngleDeg = 5.0;
     const scalar tiltAngleRad = tiltAngleDeg * constant::mathematical::pi / 180.0;
 
