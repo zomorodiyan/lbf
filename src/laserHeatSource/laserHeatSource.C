@@ -22,6 +22,7 @@ License
 #include "constants.H"
 #include "findLocalCell.H"
 #include "SortableList.H"
+#include "RHFTable.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -149,7 +150,9 @@ laserHeatSource::laserHeatSource
     laserNames_(0),
     laserDicts_(0),
     timeVsLaserPosition_(0),
-    timeVsLaserPower_(0)
+    timeVsLaserPower_(0),
+    rhfTable_(),
+    rhfTableFile_("")
 {
     // Initialise the laser power and position
     if (found("lasers"))
@@ -226,6 +229,13 @@ laserHeatSource::laserHeatSource
 
     laserBoundary_ = fvc::average(laserBoundary_);
 
+    // Load RHF table if specified
+    if (this->found("rhfTableFile"))
+    {
+        rhfTableFile_ = fileName(Foam::string(this->lookup("rhfTableFile")));
+        rhfTable_.readCSV(rhfTableFile_);
+    }
+
     // Give errors if the old input format is found
 
     if (found("HS_bg"))
@@ -284,6 +294,7 @@ void Foam::laserHeatSource::updateDeposition
 }
 
 
+
 void Foam::laserHeatSource::updateGaussianDeposition
 (
     const volScalarField& alphaFiltered,
@@ -293,7 +304,44 @@ void Foam::laserHeatSource::updateGaussianDeposition
     const scalar laserRadius
 )
 {
-    const scalar laserHeight = 0.0001;
+    // Minimum thresholds
+    const scalar minAbsorptivity = 0.28;
+    const scalar minLaserRadius = 10e-6; // 10 um in meters
+    const scalar minLaserHeight = 33e-6; // 33 um in meters
+
+    // Get current simulation time
+    const scalar time = this->db().time().value();
+    // Get RHF value for this time (default to 1 if table not loaded)
+    scalar rhf = 1.0;
+    if (!rhfTableFile_.empty())
+    {
+        rhf = rhfTable_.value(time);
+    }
+
+    // Get absorptivity (mean value of alphaFiltered)
+    scalar absorptivity = 0.0;
+    if (alphaFiltered.size() > 0)
+    {
+        absorptivity = gSum(alphaFiltered.internalField()) / alphaFiltered.size();
+    }
+    // Apply minimum threshold to absorptivity
+    scalar scaledAbsorptivity = Foam::max(absorptivity, minAbsorptivity);
+
+    // Scale parameters by RHF squared and apply minimum thresholds
+    const scalar rhf2 = Foam::pow(rhf, 2.0);
+    const scalar scaledLaserRadius = Foam::max(laserRadius * rhf2, minLaserRadius);
+    const scalar scaledLaserHeight = Foam::max(0.0001 * rhf2, minLaserHeight);
+    const scalar scaledEffectiveRadius = effectiveRadius_ * rhf2;
+    // Use scaledAbsorptivity in power scaling
+    const scalar scaledLaserPower = currentLaserPower * rhf2 * scaledAbsorptivity;
+
+    // Avoid division by zero
+    if (scaledLaserRadius <= SMALL || scaledLaserHeight <= SMALL)
+    {
+        deposition_ = 0.0;
+        return;
+    }
+
     const scalar tiltAngleDeg = 5.0;
     const scalar tiltAngleRad = tiltAngleDeg * constant::mathematical::pi / 180.0;
 
@@ -306,7 +354,7 @@ void Foam::laserHeatSource::updateGaussianDeposition
     const scalar pi = constant::mathematical::pi;
     // Normalize so that the peak (center) value integrates to the total power over the cross-section
     // Use: Power / (pi * laserRadius^2 * laserHeight)
-    const scalar gaussianNorm = 2 * currentLaserPower / (pi * Foam::pow(laserRadius, 2.0) * laserHeight);
+    const scalar gaussianNorm = 2 * scaledLaserPower / (pi * Foam::pow(scaledLaserRadius, 2.0) * scaledLaserHeight);
 
     deposition_ *= 0.0;
 
@@ -315,14 +363,14 @@ void Foam::laserHeatSource::updateGaussianDeposition
         vector d = cellCenters[celli] - currentLaserPosition;
         scalar axial = d & axisDir;
 
-        if (axial >= 0 && axial <= laserHeight)
+        if (axial >= 0 && axial <= scaledLaserHeight)
         {
             vector radialVec = d - axial * axisDir;
             scalar radial2 = magSqr(radialVec);
 
-            if (radial2 <= Foam::pow(effectiveRadius_, 2.0))
+            if (radial2 <= Foam::pow(scaledEffectiveRadius, 2.0))
             {
-                scalar Q = gaussianNorm * Foam::exp(-radial2 / Foam::pow(laserRadius, 2.0));
+                scalar Q = gaussianNorm * Foam::exp(-radial2 / Foam::pow(scaledLaserRadius, 2.0));
                 deposition_[celli] = Q;
             }
             else
@@ -341,5 +389,4 @@ void Foam::laserHeatSource::updateGaussianDeposition
 
 } // End namespace Foam
 
-// ************************************************************************* //
 // ************************************************************************* //

@@ -43,6 +43,7 @@ SourceFiles
 #include "volFields.H"
 #include "dictionary.H"
 #include "interpolationTable.H"
+#include "RHFTable.H" // Add this include
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -97,6 +98,11 @@ class laserHeatSource
 
         //- List of the time vs laser power interpolation series
         PtrList<interpolationTable<scalar>> timeVsLaserPower_;
+
+        //- RHF table for scaling laser parameters
+        RHFTable rhfTable_;
+        //- File name for RHF table
+        fileName rhfTableFile_;
 
 
     // Private Member Functions
@@ -213,6 +219,9 @@ public:
 
         // Getter for effectiveRadius_
         scalar effectiveRadius() const { return effectiveRadius_; }
+
+        //- Return RHF value at given time
+        scalar rhfValue(scalar t) const { return rhfTable_.value(t); }
 
 };
 
