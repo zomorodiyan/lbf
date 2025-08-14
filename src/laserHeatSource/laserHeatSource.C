@@ -20,7 +20,7 @@ License
 #include "laserHeatSource.H"
 #include "fvc.H"
 #include "constants.H"
-#include "findLocalCell.H"
+
 #include "SortableList.H"
 #include "RHFTable.H"
 
@@ -32,7 +32,6 @@ namespace Foam
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
 defineTypeNameAndDebug(laserHeatSource, 0);
-
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
@@ -285,7 +284,7 @@ laserHeatSource::laserHeatSource
 // --- Restore empty stub for updateDeposition to fix linker error ---
 void Foam::laserHeatSource::updateDeposition
 (
-    const volScalarField& alphaFiltered,
+    const volScalarField& /*alphaFiltered*/,
     const volVectorField& nFiltered,
     const volScalarField& resistivity_in
 )
@@ -293,11 +292,9 @@ void Foam::laserHeatSource::updateDeposition
     // Ray-tracing is disabled. This is a stub to satisfy the linker.
 }
 
-
-
 void Foam::laserHeatSource::updateGaussianDeposition
 (
-    const volScalarField& alphaFiltered,
+    const volScalarField& /*alphaFiltered*/,
     const word& laserName,
     const vector& currentLaserPosition,
     const scalar currentLaserPower,
@@ -311,6 +308,7 @@ void Foam::laserHeatSource::updateGaussianDeposition
 
     // Get current simulation time
     const scalar time = this->db().time().value();
+    
     // Get RHF value for this time (default to 1 if table not loaded)
     scalar rhf = 1.0;
     if (!rhfTableFile_.empty())
@@ -318,29 +316,14 @@ void Foam::laserHeatSource::updateGaussianDeposition
         rhf = rhfTable_.value(time);
     }
 
-    // Get absorptivity (mean value of alphaFiltered)
-    scalar absorptivity = 0.0;
-    if (alphaFiltered.size() > 0)
-    {
-        absorptivity = gSum(alphaFiltered.internalField()) / alphaFiltered.size();
-    }
-    // Apply minimum threshold to absorptivity
-    scalar scaledAbsorptivity = Foam::max(absorptivity, minAbsorptivity);
-
     // Scale parameters by RHF squared and apply minimum thresholds
     const scalar rhf2 = Foam::pow(rhf, 2.0);
     const scalar scaledLaserRadius = Foam::max(laserRadius * rhf2, minLaserRadius);
     const scalar scaledLaserHeight = Foam::max(0.0001 * rhf2, minLaserHeight);
-    const scalar scaledEffectiveRadius = effectiveRadius_ * rhf2;
+    const scalar scaledEffectiveRadius = Foam::max(effectiveRadius_ * rhf2, effectiveRadius_/laserRadius*minLaserRadius);
+    
     // Use scaledAbsorptivity in power scaling
-    const scalar scaledLaserPower = currentLaserPower * rhf2 * scaledAbsorptivity;
-
-    // Avoid division by zero
-    if (scaledLaserRadius <= SMALL || scaledLaserHeight <= SMALL)
-    {
-        deposition_ = 0.0;
-        return;
-    }
+    const scalar scaledLaserPower = currentLaserPower * Foam::max(rhf2, minAbsorptivity);
 
     const scalar tiltAngleDeg = 5.0;
     const scalar tiltAngleRad = tiltAngleDeg * constant::mathematical::pi / 180.0;
@@ -384,8 +367,6 @@ void Foam::laserHeatSource::updateGaussianDeposition
         }
     }
 }
-
-// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 } // End namespace Foam
 
