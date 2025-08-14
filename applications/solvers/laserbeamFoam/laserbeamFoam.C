@@ -93,6 +93,7 @@ int main(int argc, char *argv[])
         }
 
         runTime++;
+        Info << "Current simulation time: " << runTime.timeName() << nl << endl;
 
         // --- Energy-only simulation: Only update properties and heat source ---
         #include "updateProps.H"
