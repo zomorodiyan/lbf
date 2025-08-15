@@ -76,9 +76,6 @@ int main(int argc, char *argv[])
         #include "setInitialDeltaT.H"
     }
 
-    // Initialize elapsed time tracking
-    const scalar startExecutionTime = runTime.elapsedClockTime();
-
     while (pimple.run(runTime))
     {
         #include "readControls.H"
@@ -96,16 +93,7 @@ int main(int argc, char *argv[])
         }
 
         runTime++;
-        
-        // Calculate elapsed time
-        scalar elapsedTime = runTime.elapsedClockTime() - startExecutionTime;
-        scalar elapsedMinutes = elapsedTime / 60.0;
-        scalar elapsedHours = elapsedTime / 3600.0;
-        
-        Info << "Current simulation time: " << runTime.timeName() 
-             << ", Elapsed : " << elapsedTime << " s ("
-             << elapsedMinutes << " min"
-             << elapsedHours << " h)" << nl << endl;
+        Info << "Current simulation time: " << runTime.timeName() << nl << endl;
 
         // --- Energy-only simulation: Only update properties and heat source ---
         #include "updateProps.H"
@@ -135,7 +123,6 @@ int main(int argc, char *argv[])
                         << exit(FatalError);
                 }
 
-                /*
                 if (laserRadius <= SMALL || currentLaserPower <= SMALL)
                 {
                     FatalErrorInFunction
@@ -144,7 +131,6 @@ int main(int argc, char *argv[])
                         << "currentLaserPower=" << currentLaserPower << nl
                         << "Check your LaserProperties dictionary!" << exit(FatalError);
                 }
-                */
 
                 laser.updateGaussianDeposition
                 (
@@ -163,12 +149,11 @@ int main(int argc, char *argv[])
         //}
 
         #include "TEqn.H"
-        /*
+
         volScalarField alphaMetal = 
             mesh.lookupObject<volScalarField>("alpha.metal");
         condition = pos(alphaMetal - 0.5) * pos(epsilon1 - 0.5);
         meltHistory += condition;
-        */
 
         runTime.write();
     }

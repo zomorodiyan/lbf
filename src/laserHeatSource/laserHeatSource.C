@@ -145,7 +145,7 @@ laserHeatSource::laserHeatSource
         dimensionedScalar("refineflag", dimensionSet(0,0,0,0,0), 0.0)
     ),
     powderSim_(lookupOrDefault<Switch>("PowderSim", false)),
-    effectiveRadius_(lookupOrDefault<scalar>("effectiveRadius", 2e-4)),
+    effectiveRadius_(lookupOrDefault<scalar>("effectiveRadius", 1e-3)),
     laserNames_(0),
     laserDicts_(0),
     timeVsLaserPosition_(0),
@@ -319,12 +319,11 @@ void Foam::laserHeatSource::updateGaussianDeposition
     // Scale parameters by RHF squared and apply minimum thresholds
     const scalar rhf2 = Foam::pow(rhf, 2.0);
     const scalar scaledLaserRadius = Foam::max(laserRadius * rhf2, minLaserRadius);
-    const scalar laserHeight = 0.0001;
-    const scalar scaledLaserHeight = Foam::max(laserHeight * rhf2, minLaserHeight);
+    const scalar scaledLaserHeight = Foam::max(0.0001 * rhf2, minLaserHeight);
     const scalar scaledEffectiveRadius = Foam::max(effectiveRadius_ * rhf2, effectiveRadius_/laserRadius*minLaserRadius);
     
-    const scalar absorptivity = 0.35;
-    const scalar scaledLaserPower = currentLaserPower * Foam::max(absorptivity*rhf2, minAbsorptivity);
+    // Use scaledAbsorptivity in power scaling
+    const scalar scaledLaserPower = currentLaserPower * Foam::max(rhf2, minAbsorptivity);
 
     const scalar tiltAngleDeg = 5.0;
     const scalar tiltAngleRad = tiltAngleDeg * constant::mathematical::pi / 180.0;
