@@ -145,7 +145,7 @@ laserHeatSource::laserHeatSource
         dimensionedScalar("refineflag", dimensionSet(0,0,0,0,0), 0.0)
     ),
     powderSim_(lookupOrDefault<Switch>("PowderSim", false)),
-    effectiveRadius_(lookupOrDefault<scalar>("effectiveRadius", 1e-3)),
+    effectiveRadius_(lookupOrDefault<scalar>("effectiveRadius", 0.001)),
     laserNames_(0),
     laserDicts_(0),
     timeVsLaserPosition_(0),
@@ -302,9 +302,13 @@ void Foam::laserHeatSource::updateGaussianDeposition
 )
 {
     // Minimum thresholds
-    const scalar minAbsorptivity = 0.28;
-    const scalar minLaserRadius = 10e-6; // 10 um in meters
-    const scalar minLaserHeight = 33e-6; // 33 um in meters
+    const scalar minLaserRadius = laserRadius; 
+    const scalar minLaserHeight = 63e-6; // minHeight/Height = minAbsorb/Absorb
+    const scalar minAbsorptivity = 0.28; // Ni-based Alloy flat surface Absorb.
+
+    // calibration parameters (there is also effectiveRadius)
+    const scalar absorptivity = 0.48; 
+    const scalar laserHeight = 0.0001085;
 
     // Get current simulation time
     const scalar time = this->db().time().value();
@@ -318,12 +322,20 @@ void Foam::laserHeatSource::updateGaussianDeposition
 
     // Scale parameters by RHF squared and apply minimum thresholds
     const scalar rhf2 = Foam::pow(rhf, 2.0);
-    const scalar scaledLaserRadius = Foam::max(laserRadius * rhf2, minLaserRadius);
-    const scalar scaledLaserHeight = Foam::max(0.0001 * rhf2, minLaserHeight);
-    const scalar scaledEffectiveRadius = Foam::max(effectiveRadius_ * rhf2, effectiveRadius_/laserRadius*minLaserRadius);
     
-    // Use scaledAbsorptivity in power scaling
-    const scalar scaledLaserPower = currentLaserPower * Foam::max(rhf2, minAbsorptivity);
+    const scalar laserRadiusScaled = laserRadius * rhf2;
+    const scalar scaledLaserRadius = Foam::max(laserRadiusScaled, minLaserRadius);
+    
+    const scalar laserHeightScaled = laserHeight * rhf2;
+    const scalar scaledLaserHeight = Foam::max(laserHeightScaled, minLaserHeight);
+    
+    const scalar effectiveRadiusScaled = effectiveRadius_ * rhf2;
+    const scalar effectiveRadiusMinThreshold = effectiveRadius_/laserRadius*minLaserRadius;
+    const scalar scaledEffectiveRadius = Foam::max(effectiveRadiusScaled, effectiveRadiusMinThreshold);
+    
+    const scalar absorptivityScaled = absorptivity * rhf2;
+    const scalar scaledLaserPower = currentLaserPower
+* Foam::max(absorptivityScaled, minAbsorptivity);
 
     const scalar tiltAngleDeg = 5.0;
     const scalar tiltAngleRad = tiltAngleDeg * constant::mathematical::pi / 180.0;

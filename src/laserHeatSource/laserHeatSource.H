@@ -198,7 +198,7 @@ public:
         //  Uses only the necessary parameters for a simple Gaussian profile
         void updateGaussianDeposition
         (
-            const volScalarField& alphaFiltered,
+            const volScalarField& /*alphaFiltered*/,
             const word& laserName,
             const vector& currentLaserPosition,
             const scalar currentLaserPower,
