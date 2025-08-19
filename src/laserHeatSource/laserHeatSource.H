@@ -54,8 +54,7 @@ namespace Foam
 \*---------------------------------------------------------------------------*/
 
 class laserHeatSource
-:
-    public IOdictionary
+: public IOdictionary
 {
     // Private data
 
@@ -86,6 +85,12 @@ class laserHeatSource
 
         //- Effective radius for Gaussian deposition
         scalar effectiveRadius_;
+
+    //- Laser height for Gaussian deposition (read from dict)
+    scalar laserHeight_;
+
+    //- Absorptivity for Gaussian deposition (read from dict)
+    scalar absorptivity_;
 
         //- List of the laser names
         wordList laserNames_;
@@ -217,8 +222,13 @@ public:
         // Getter for timeVsLaserPower_
         const PtrList<interpolationTable<scalar>>& timeVsLaserPower() const { return timeVsLaserPower_; }
 
-        // Getter for effectiveRadius_
-        scalar effectiveRadius() const { return effectiveRadius_; }
+
+    // Getter for effectiveRadius_
+    scalar effectiveRadius() const { return effectiveRadius_; }
+    // Getter for laserHeight_
+    scalar laserHeight() const { return laserHeight_; }
+    // Getter for absorptivity_
+    scalar absorptivity() const { return absorptivity_; }
 
         //- Return RHF value at given time
         scalar rhfValue(scalar t) const { return rhfTable_.value(t); }
