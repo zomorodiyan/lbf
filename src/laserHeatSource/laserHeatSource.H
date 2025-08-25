@@ -92,6 +92,9 @@ class laserHeatSource
     //- Absorptivity for Gaussian deposition (read from dict)
     scalar absorptivity_;
 
+    //- Taper length for pencil-like end (read from dict)
+    scalar taperLength_;
+
         //- List of the laser names
         wordList laserNames_;
 

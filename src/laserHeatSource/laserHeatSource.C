@@ -147,6 +147,7 @@ laserHeatSource::laserHeatSource
     effectiveRadius_(lookupOrDefault<scalar>("effectiveRadius", 0.001)),
     laserHeight_(lookupOrDefault<scalar>("laserHeight", 0.0001085)),
     absorptivity_(lookupOrDefault<scalar>("absorptivity", 0.48)),
+    taperLength_(lookupOrDefault<scalar>("taperLength", 0.00001)),
     laserNames_(0),
     laserDicts_(0),
     timeVsLaserPosition_(0),
@@ -361,12 +362,25 @@ void Foam::laserHeatSource::updateGaussianDeposition
 
         if (axial >= 0 && axial <= scaledLaserHeight)
         {
+            // Calculate local radius for taper
+            scalar localRadius = scaledLaserRadius;
+            scalar localEffectiveRadius = scaledEffectiveRadius;
+            if (taperLength_ > SMALL && axial > (scaledLaserHeight - taperLength_))
+            {
+                // Linear taper: radius decreases from full to zero over taperLength_
+                scalar taperFrac = (scaledLaserHeight - axial) / taperLength_;
+                taperFrac = Foam::max(0.0, Foam::min(1.0, taperFrac));
+                localRadius = scaledLaserRadius * taperFrac;
+                localEffectiveRadius = scaledEffectiveRadius * taperFrac;
+            }
+
             vector radialVec = d - axial * axisDir;
             scalar radial2 = magSqr(radialVec);
 
-            if (radial2 <= Foam::pow(scaledEffectiveRadius, 2.0))
+            if (radial2 <= Foam::pow(localEffectiveRadius, 2.0))
             {
-                scalar Q = gaussianNorm * Foam::exp(-radial2 / Foam::pow(scaledLaserRadius, 2.0));
+                // Use localRadius in Gaussian profile
+                scalar Q = gaussianNorm * Foam::exp(-radial2 / Foam::pow(Foam::max(localRadius, SMALL), 2.0));
                 deposition_[celli] = Q;
             }
             else
