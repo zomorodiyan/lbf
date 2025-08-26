@@ -428,11 +428,7 @@ void Foam::laserHeatSource::updateGaussianDeposition
     // Heat transfer parameters
     const scalar roomTemp = 295.15; // K
     const scalar actualSurfaceY = 0.0; // m - surface location at y=0
-    const scalar tolerance = 2e-5; // tolerance for surface detection (0.01mm = 10 microns)
-    
-    Info << "Surface detection:" << endl;
-    Info << "  Surface y = " << actualSurfaceY << endl;
-    Info << "  Using tolerance " << tolerance << " (cells with y <= " << tolerance << ")" << endl;
+    const scalar tolerance = 2e-5; // tolerance for surface detection (0.02mm = 20 microns)
     
     // Convection parameters (5 m/s flow at 5mm distance)
     const scalar velocity = 5.0; // m/s
@@ -452,49 +448,12 @@ void Foam::laserHeatSource::updateGaussianDeposition
     const scalar stefanBoltzmann = 5.67e-8; // W/(m²·K⁴)
     const scalar emissivity = 0.8; // typical for metallic surfaces
 
-    Info << "Heat transfer coefficients - Convection h: " << h_conv 
-         << " W/(m²·K), Re: " << Re << ", Nu: " << Nu << endl;
-
     // Try to get temperature field from the database
     const volScalarField* TPtr = nullptr;
     if (mesh.foundObject<volScalarField>("T"))
     {
         TPtr = &mesh.lookupObject<volScalarField>("T");
-        Info << "Found temperature field T for heat loss calculations" << endl;
     }
-    else
-    {
-        WarningInFunction
-            << "Temperature field 'T' not found. Heat losses will not be calculated." << endl;
-    }
-
-    // Counters for debugging
-    label surfaceCellCount = 0;
-    label hotSurfaceCellCount = 0;
-    scalar totalHeatLoss = 0.0;
-    scalar maxTemp = 0.0;
-    scalar minTemp = 1000.0;
-    
-    // Check y-coordinate distribution near surface
-    scalar minY = 1000.0;
-    scalar maxY = -1000.0;
-    label nearSurfaceCells = 0;
-    
-    forAll(cellCenters, celli)
-    {
-        scalar y = cellCenters[celli].y();
-        if (y < 0.000020) // Check cells near the surface (within 0.01mm)
-        {
-            minY = Foam::min(minY, y);
-            maxY = Foam::max(maxY, y);
-            nearSurfaceCells++;
-        }
-    }
-    
-    Info << "Y-coordinate analysis:" << endl;
-    Info << "  Surface y = " << actualSurfaceY << " with tolerance " << tolerance << endl;
-    Info << "  Cells within tolerance of surface: " << nearSurfaceCells << endl;
-    Info << "  Y-range near surface: " << minY << " to " << maxY << endl;
 
     forAll(cellCenters, celli)
     {
@@ -532,21 +491,13 @@ void Foam::laserHeatSource::updateGaussianDeposition
         }
 
         // Heat losses for surface cells (convection and radiation)
-        // Apply to cells within tolerance of the actual surface
         scalar cellY = cellCenters[celli].y();
         if (TPtr != nullptr && cellY <= (actualSurfaceY + tolerance))
         {
-            surfaceCellCount++;
             const scalar cellTemp = (*TPtr)[celli];
-            
-            // Track temperature range
-            maxTemp = Foam::max(maxTemp, cellTemp);
-            minTemp = Foam::min(minTemp, cellTemp);
             
             if (cellTemp > roomTemp + 1.0) // Only apply heat losses if temperature is significantly above room temp
             {
-                hotSurfaceCellCount++;
-                
                 // Convection heat loss: q_conv = h * (T_surface - T_ambient)
                 scalar Q_conv = h_conv * (cellTemp - roomTemp);
                 
@@ -558,33 +509,10 @@ void Foam::laserHeatSource::updateGaussianDeposition
                 scalar Q_loss = -(Q_conv + Q_rad);
                 
                 Q_total += Q_loss;
-                totalHeatLoss += mag(Q_loss);
-                
-                // Debug output for significant heat losses or every 100th hot cell
-                if (mag(Q_loss) > 1000.0 || hotSurfaceCellCount % 100 == 1)
-                {
-                    Info << "Cell " << celli << " at y=" << cellY 
-                         << " T=" << cellTemp << "K: Q_conv=" << Q_conv 
-                         << ", Q_rad=" << Q_rad << ", Q_total_loss=" << Q_loss << " W/m³" << endl;
-                }
             }
         }
 
         deposition_[celli] = Q_total;
-    }
-    
-    // Summary statistics
-    Info << "Surface heat loss summary:" << endl;
-    Info << "  Total surface cells found: " << surfaceCellCount << endl;
-    Info << "  Hot surface cells (T > " << roomTemp + 1.0 << "K): " << hotSurfaceCellCount << endl;
-    Info << "  Temperature range: " << minTemp << " - " << maxTemp << " K" << endl;
-    Info << "  Total heat loss: " << totalHeatLoss << " W/m³" << endl;
-    
-    if (surfaceCellCount == 0)
-    {
-        WarningInFunction
-            << "No surface cells found at y = " << actualSurfaceY 
-            << " ± " << tolerance << ". Check surface detection criteria." << endl;
     }
 }
 
