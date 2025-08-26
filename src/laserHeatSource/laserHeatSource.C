@@ -420,7 +420,7 @@ void Foam::laserHeatSource::updateGaussianDeposition
     // Normalize so that the peak (center) value integrates to the total power over the cross-section
     // The integralValue already incorporates the geometric factors including π
     const scalar gaussianNorm = currentLaserPower * scaledAbsorptivity / integralValue;
-    Info << " gaussianNorm: " << gaussianNorm << endl;
+    Info << " gaussianNorm: " << gaussianNorm <<" scaledAbsorptivity: " << scaledAbsorptivity << endl;
 
     deposition_ *= 0.0;
 
