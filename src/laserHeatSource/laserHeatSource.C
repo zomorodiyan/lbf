@@ -390,7 +390,7 @@ void Foam::laserHeatSource::updateGaussianDeposition
     const scalar time = this->db().time().value();
 
     // Calculate and display the integral value for current parameters
-    scalar integralValue = calculateGaussianIntegral(effectiveRadius_, laserHeight_, taperLength_, laserRadius);
+    const scalar integralValue = calculateGaussianIntegral(effectiveRadius_, laserHeight_, taperLength_, laserRadius);
     Info << " effectiveR: " << effectiveRadius_ << " Height: " << laserHeight_ << " taperLength: " << taperLength_ << " laserRadius:" << laserRadius << " Integral: " << integralValue << endl;
 
     // Get RHF value for this time (default to 1 if table not loaded)
@@ -417,10 +417,9 @@ void Foam::laserHeatSource::updateGaussianDeposition
     const fvMesh& mesh = deposition_.mesh();
     const vectorField& cellCenters = mesh.C();
 
-    const scalar pi = constant::mathematical::pi;
     // Normalize so that the peak (center) value integrates to the total power over the cross-section
-    // Use: Power / (pi * laserRadius^2 * laserHeight)
-    const scalar gaussianNorm = 2 * currentLaserPower * scaledAbsorptivity / (pi * Foam::pow(scaledLaserRadius, 2.0) * scaledLaserHeight);
+    // The integralValue already incorporates the geometric factors including π
+    const scalar gaussianNorm = currentLaserPower * scaledAbsorptivity / integralValue;
     Info << " gaussianNorm: " << gaussianNorm << endl;
 
     deposition_ *= 0.0;
