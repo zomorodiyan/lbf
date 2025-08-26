@@ -236,54 +236,11 @@ laserHeatSource::laserHeatSource
         rhfTableFile_ = fileName(Foam::string(this->lookup("rhfTableFile")));
         rhfTable_.readCSV(rhfTableFile_);
     }
-
-    // Give errors if the old input format is found
-
-    if (found("HS_bg"))
-    {
-        FatalErrorInFunction
-            << "'HS_bg' is deprecated: please instead specify the laser "
-            << "position in time via the laserPositionVsTime sub-dict"
-            << exit(FatalError);
-    }
-
-    if (found("HS_lg"))
-    {
-        FatalErrorInFunction
-            << "'HS_lg' is deprecated: please instead specify the laser "
-            << "position in time via the laserPositionVsTime sub-dict"
-            << exit(FatalError);
-    }
-
-    if (found("HS_velocity"))
-    {
-        FatalErrorInFunction
-            << "'HS_velocity' is deprecated: please instead specify the laser "
-            << "position in time via the laserPositionVsTime sub-dict"
-            << exit(FatalError);
-    }
-
-    if (found("HS_Q"))
-    {
-        FatalErrorInFunction
-            << "'HS_Q' is deprecated: please instead specify the laser "
-            << "power in time via the laserPowereVsTime sub-dict"
-            << exit(FatalError);
-    }
-
-    if (found("elec_resistivity"))
-    {
-        FatalErrorInFunction
-            << "'elec_resistivity' is deprecated: resistivity is now "
-            << "passed in from the solver as a field"
-            << exit(FatalError);
-    }
 }
-
+    
 
 // * * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
-// --- Restore empty stub for updateDeposition to fix linker error ---
 void Foam::laserHeatSource::updateDeposition
 (
     const volScalarField& /*alphaFiltered*/,
@@ -304,11 +261,6 @@ void Foam::laserHeatSource::updateGaussianDeposition
     const scalar laserRadius
 )
 {
-    // Minimum thresholds
-    const scalar minLaserRadius = laserRadius;
-    const scalar minLaserHeight = 63e-6; // minHeight/Height = minAbsorb/Absorb
-    const scalar minAbsorptivity = 0.28; // Ni-based Alloy flat surface Absorb.
-
     // Use member variables for absorptivity and laserHeight
     const scalar absorptivity = absorptivity_;
     const scalar laserHeight = laserHeight_;
@@ -323,21 +275,14 @@ void Foam::laserHeatSource::updateGaussianDeposition
         rhf = rhfTable_.value(time);
     }
 
-    // Scale parameters by RHF squared and apply minimum thresholds
+    // Scale parameters by RHF squared (no enforced minima/maxima)
     const scalar rhf2 = Foam::pow(rhf, 2.0);
 
-    const scalar laserRadiusScaled = laserRadius * rhf2;
-    const scalar scaledLaserRadius = Foam::max(laserRadiusScaled, minLaserRadius);
-
-    const scalar laserHeightScaled = laserHeight * rhf2;
-    const scalar scaledLaserHeight = Foam::max(laserHeightScaled, minLaserHeight);
-
-    const scalar effectiveRadiusScaled = effectiveRadius_ * rhf2;
-    const scalar effectiveRadiusMinThreshold = effectiveRadius_/laserRadius*minLaserRadius;
-    const scalar scaledEffectiveRadius = Foam::max(effectiveRadiusScaled, effectiveRadiusMinThreshold);
-
+    const scalar scaledLaserRadius = laserRadius * rhf2;
+    const scalar scaledLaserHeight = laserHeight * rhf2;
+    const scalar scaledEffectiveRadius = effectiveRadius_ * rhf2;
     const scalar absorptivityScaled = absorptivity * rhf2;
-    const scalar scaledLaserPower = currentLaserPower * Foam::max(absorptivityScaled, minAbsorptivity);
+    const scalar scaledLaserPower = currentLaserPower * absorptivityScaled;
 
     const scalar tiltAngleDeg = 5.0;
     const scalar tiltAngleRad = tiltAngleDeg * constant::mathematical::pi / 180.0;
@@ -379,8 +324,8 @@ void Foam::laserHeatSource::updateGaussianDeposition
 
             if (radial2 <= Foam::pow(localEffectiveRadius, 2.0))
             {
-                // Use localRadius in Gaussian profile
-                scalar Q = gaussianNorm * Foam::exp(-radial2 / Foam::pow(Foam::max(localRadius, SMALL), 2.0));
+                // Use localRadius in Gaussian profile (no near-zero guards)
+                scalar Q = gaussianNorm * Foam::exp(-radial2 / Foam::pow(localRadius, 2.0));
                 deposition_[celli] = Q;
             }
             else
