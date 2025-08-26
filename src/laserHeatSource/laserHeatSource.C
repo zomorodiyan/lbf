@@ -354,7 +354,7 @@ scalar Foam::laserHeatSource::calculateGaussianIntegral(scalar effectiveRadius, 
 
 void Foam::laserHeatSource::updateDeposition
 (
-    const volScalarField& /*alphaFiltered*/,
+    const volScalarField& alphaFiltered,
     const volVectorField& nFiltered,
     const volScalarField& resistivity_in
 )
@@ -365,7 +365,7 @@ void Foam::laserHeatSource::updateDeposition
 
 void Foam::laserHeatSource::updateGaussianDeposition
 (
-    const volScalarField& /*alphaFiltered*/,
+    const volScalarField& alphaFiltered,
     const word& laserName,
     const vector& currentLaserPosition,
     const scalar currentLaserPower,
