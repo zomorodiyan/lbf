@@ -241,6 +241,117 @@ laserHeatSource::laserHeatSource
 
 // * * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
+scalar Foam::laserHeatSource::gaussianFunction(scalar r, scalar sigma) const
+{
+    return Foam::exp(-Foam::pow(r, 2.0) / (2.0 * Foam::pow(sigma, 2.0)));
+}
+
+scalar Foam::laserHeatSource::getRadiusAtPosition(scalar s, scalar effectiveRadius, scalar laserHeight, scalar taperLength) const
+{
+    if (s < 0 || s > laserHeight)
+    {
+        return 0.0;
+    }
+
+    scalar constantLength = laserHeight - taperLength;
+    if (s <= constantLength)
+    {
+        return effectiveRadius;
+    }
+    else
+    {
+        // Linear taper to zero
+        scalar taperProgress = (s - constantLength) / taperLength;
+        return effectiveRadius * (1.0 - taperProgress);
+    }
+}
+
+void Foam::laserHeatSource::toCartesian(scalar r, scalar theta, scalar s, scalar& x, scalar& y, scalar& z) const
+{
+    const scalar tiltAngleDeg = 5.0;
+    const scalar tiltAngleRad = tiltAngleDeg * constant::mathematical::pi / 180.0;
+    
+    x = r * Foam::cos(theta);
+    y = s * Foam::cos(tiltAngleRad) - r * Foam::sin(theta) * Foam::sin(tiltAngleRad);
+    z = s * Foam::sin(tiltAngleRad) + r * Foam::sin(theta) * Foam::cos(tiltAngleRad);
+}
+
+scalar Foam::laserHeatSource::integrand(scalar r, scalar theta, scalar s, scalar effectiveRadius, scalar laserHeight, scalar taperLength, scalar laserRadius) const
+{
+    // Check if point is within object bounds
+    scalar maxRadius = getRadiusAtPosition(s, effectiveRadius, laserHeight, taperLength);
+    if (r > maxRadius)
+    {
+        return 0.0;
+    }
+
+    // Check if point is above y=0 surface (cut-off constraint)
+    scalar x, y, z;
+    toCartesian(r, theta, s, x, y, z);
+    if (y < 0)
+    {
+        return 0.0;
+    }
+
+    // Calculate Gaussian value
+    scalar sigma = laserRadius / 2.0;
+    scalar gaussianVal = gaussianFunction(r, sigma);
+
+    // Return with cylindrical Jacobian
+    return gaussianVal * r;
+}
+
+scalar Foam::laserHeatSource::calculateGaussianIntegral(scalar effectiveRadius, scalar laserHeight, scalar taperLength, scalar laserRadius) const
+{
+    const label nS = 100;
+    const label nR = 50;
+    const label nTheta = 100;
+    
+    scalar integralSum = 0.0;
+    const scalar pi = constant::mathematical::pi;
+    
+    // Create integration grids
+    scalar ds = laserHeight / scalar(nS);
+    scalar dtheta = 2.0 * pi / scalar(nTheta);
+    
+    for (label si = 0; si < nS; si++)
+    {
+        scalar s = -laserRadius + (scalar(si) + 0.5) * (laserHeight + laserRadius) / scalar(nS);
+        scalar maxR = getRadiusAtPosition(s, effectiveRadius, laserHeight, taperLength);
+        
+        if (maxR > 0)
+        {
+            scalar dr = maxR / scalar(nR);
+            
+            for (label ri = 0; ri < nR; ri++)
+            {
+                scalar r = (scalar(ri) + 0.5) * dr;
+                
+                for (label thetai = 0; thetai < nTheta; thetai++)
+                {
+                    scalar theta = (scalar(thetai) + 0.5) * dtheta;
+                    
+                    // Check if point is above y=0 surface
+                    scalar x, y, z;
+                    toCartesian(r, theta, s, x, y, z);
+                    if (y >= 0)
+                    {
+                        // Calculate integrand: Gaussian * r (cylindrical Jacobian)
+                        scalar sigma = laserRadius / 2.0;
+                        scalar gaussianVal = gaussianFunction(r, sigma);
+                        scalar integrandVal = gaussianVal * r;
+                        
+                        // Add to integral with volume element
+                        integralSum += integrandVal * dr * dtheta * ds;
+                    }
+                }
+            }
+        }
+    }
+    
+    return integralSum;
+}
+
 void Foam::laserHeatSource::updateDeposition
 (
     const volScalarField& /*alphaFiltered*/,
@@ -261,12 +372,12 @@ void Foam::laserHeatSource::updateGaussianDeposition
     const scalar laserRadius
 )
 {
-    // Use member variables for absorptivity and laserHeight
-    const scalar absorptivity = absorptivity_;
-    const scalar laserHeight = laserHeight_;
-
     // Get current simulation time
     const scalar time = this->db().time().value();
+
+    // Calculate and display the integral value for current parameters
+    scalar integralValue = calculateGaussianIntegral(effectiveRadius_, laserHeight_, taperLength_, laserRadius);
+    Info << " effectiveR: " << effectiveRadius_ << " Height: " << laserHeight_ << " taperLength: " << taperLength_ << " laserRadius:" << laserRadius << " Integral: " << integralValue << endl;
 
     // Get RHF value for this time (default to 1 if table not loaded)
     scalar rhf = 1.0;
@@ -279,10 +390,9 @@ void Foam::laserHeatSource::updateGaussianDeposition
     const scalar rhf2 = Foam::pow(rhf, 2.0);
 
     const scalar scaledLaserRadius = laserRadius * rhf2;
-    const scalar scaledLaserHeight = laserHeight * rhf2;
+    const scalar scaledLaserHeight = laserHeight_ * rhf2;
     const scalar scaledEffectiveRadius = effectiveRadius_ * rhf2;
-    const scalar absorptivityScaled = absorptivity * rhf2;
-    const scalar scaledLaserPower = currentLaserPower * absorptivityScaled;
+    const scalar scaledAbsorptivity = absorptivity_ * rhf2;
 
     const scalar tiltAngleDeg = 5.0;
     const scalar tiltAngleRad = tiltAngleDeg * constant::mathematical::pi / 180.0;
@@ -296,9 +406,11 @@ void Foam::laserHeatSource::updateGaussianDeposition
     const scalar pi = constant::mathematical::pi;
     // Normalize so that the peak (center) value integrates to the total power over the cross-section
     // Use: Power / (pi * laserRadius^2 * laserHeight)
-    const scalar gaussianNorm = 2 * scaledLaserPower / (pi * Foam::pow(scaledLaserRadius, 2.0) * scaledLaserHeight);
+    const scalar gaussianNorm = 2 * currentLaserPower * scaledAbsorptivity / (pi * Foam::pow(scaledLaserRadius, 2.0) * scaledLaserHeight);
+    Info << " gaussianNorm: " << gaussianNorm << endl;
 
     deposition_ *= 0.0;
+
 
     forAll(cellCenters, celli)
     {
@@ -324,8 +436,10 @@ void Foam::laserHeatSource::updateGaussianDeposition
 
             if (radial2 <= Foam::pow(localEffectiveRadius, 2.0))
             {
-                // Use localRadius in Gaussian profile (no near-zero guards)
-                scalar Q = gaussianNorm * Foam::exp(-radial2 / Foam::pow(localRadius, 2.0));
+                // Use localRadius in Gaussian profile with standard form: exp(-r^2 / (2*sigma^2))
+                scalar r = Foam::sqrt(radial2);
+                scalar sigma = localRadius / 2.0;
+                scalar Q = gaussianNorm * Foam::exp(-Foam::pow(r, 2.0) / (2.0 * Foam::pow(sigma, 2.0)));
                 deposition_[celli] = Q;
             }
             else

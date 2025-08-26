@@ -121,6 +121,21 @@ class laserHeatSource
         //- Disallow default bitwise assignment
         void operator=(const laserHeatSource&);
 
+        //- Calculate Gaussian function value
+        scalar gaussianFunction(scalar r, scalar sigma) const;
+
+        //- Get radius at position s along the tilted axis
+        scalar getRadiusAtPosition(scalar s, scalar effectiveRadius, scalar laserHeight, scalar taperLength) const;
+
+        //- Convert tilted cylindrical coordinates to Cartesian
+        void toCartesian(scalar r, scalar theta, scalar s, scalar& x, scalar& y, scalar& z) const;
+
+        //- Calculate integrand value at (r, theta, s) in tilted cylindrical coordinates
+        scalar integrand(scalar r, scalar theta, scalar s, scalar effectiveRadius, scalar laserHeight, scalar taperLength, scalar laserRadius) const;
+
+        //- Calculate the Gaussian integral for current parameters
+        scalar calculateGaussianIntegral(scalar effectiveRadius, scalar laserHeight, scalar taperLength, scalar laserRadius) const;
+
 public:
 
     //- Runtime type information
