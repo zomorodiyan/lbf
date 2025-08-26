@@ -392,7 +392,7 @@ void Foam::laserHeatSource::updateGaussianDeposition
     const scalar scaledLaserRadius = laserRadius * rhf2;
     const scalar scaledLaserHeight = laserHeight_ * rhf2;
     const scalar scaledEffectiveRadius = effectiveRadius_ * rhf2;
-    const scalar scaledAbsorptivity = absorptivity_ * rhf2;
+    const scalar scaledAbsorptivity = absorptivity_ / Foam::max(Foam::pow(rhf2, 2.0),1);
 
     const scalar tiltAngleDeg = 5.0;
     const scalar tiltAngleRad = tiltAngleDeg * constant::mathematical::pi / 180.0;
