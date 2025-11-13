@@ -151,12 +151,12 @@ void laserHeatSource::createInitialRays
     }
     else // One ray for each boundary patch face within the laser radius
     {
-        
+
         const vectorField& CI = mesh.C();
 
         forAll(CI, celli)
-        { 
-            
+        {
+
             const scalar x_coord = CI[celli].x();
             // const scalar y_coord = CI[celli].y();
             const scalar z_coord = CI[celli].z();
@@ -818,7 +818,7 @@ void laserHeatSource::updateDeposition
 
             // Check if the ray is within the global bound box and its power is
             // greater than a small fraction of the laser power
-            if 
+            if
             (
                 globalBB.contains(curRay.position_)
              && curRay.power_ > rayPowerAbsTol
@@ -906,7 +906,6 @@ void laserHeatSource::updateDeposition
                         plasma_frequency*plasma_frequency
                        *constant::electromagnetic::epsilon0.value()
                        *resistivity_in[myCellID];
-                    //    Info<<"TEST_TESISTIVITY: "<<resistivity_in<<endl;
 
                     const scalar e_r =
                         1.0
@@ -950,58 +949,30 @@ void laserHeatSource::updateDeposition
                         argument = -1.0;
                     }
 
-                   const scalar theta_in = std::acos(argument);
+                    const scalar theta_in = std::acos(argument);
+                    const scalar pi = constant::mathematical::pi;
+                    // ~86.4 degrees
+                    const scalar grazingAngleThreshold = 0.49*pi;
 
+                    if (theta_in >= grazingAngleThreshold)
+                    {
+                        // Grazing angle - deposit half energy and reflect
+                        // deposition_[myCellID] += 0.5*curRay.power_/VI[myCellID];
+                        curRay.power_ *= 0.0;
 
-
-                   const scalar pi = constant::mathematical::pi;
-const scalar grazingAngleThreshold = 0.49 * pi; // ~86.4 degrees
-
-if (theta_in >= grazingAngleThreshold)
-{
-    // Grazing angle - deposit half energy and reflect
-    // deposition_[myCellID] += 0.5*curRay.power_/VI[myCellID];
-    curRay.power_ *= 0.0;
-    
-    // Simple reflection for grazing angles
-    curRay.direction_ -=
-        (
-            (
-                (
-                    2.0*curRay.direction_
-                  & nFilteredI[myCellID]
-                )/magSqr(nFilteredI[myCellID])
-            )
-        )*nFilteredI[myCellID];
-}
-
-else{
-
-
-
-                    const scalar alpha_laser =
-                        Foam::sqrt
-                        (
-                            Foam::sqrt
+                        // Simple reflection for grazing angles
+                        curRay.direction_ -=
                             (
-                                sqr
-                                (
-                                    sqr(ref_index)
-                                  - sqr(ext_coefficient)
-                                  - sqr(Foam::sin(theta_in))
-                                )
-                              + (
-                                    4.0*sqr(ref_index)*sqr(ext_coefficient)
-                                )
-                            )
-                          + sqr(ref_index)
-                          - sqr(ext_coefficient)
-                          - sqr(Foam::sin(theta_in))/2.0
-                        );
-
-                    const scalar beta_laser =
-                        Foam::sqrt
-                        (
+                                   (
+                                       2.0*curRay.direction_
+                                       & nFilteredI[myCellID]
+                                   )/magSqr(nFilteredI[myCellID])
+                            )*nFilteredI[myCellID];
+                    }
+                    else
+                    {
+                        const scalar alpha_laser =
+                            Foam::sqrt
                             (
                                 Foam::sqrt
                                 (
@@ -1011,120 +982,123 @@ else{
                                       - sqr(ext_coefficient)
                                       - sqr(Foam::sin(theta_in))
                                     )
-                                  + 4.0*sqr(ref_index)*sqr(ext_coefficient)
+                                  + (
+                                        4.0*sqr(ref_index)*sqr(ext_coefficient)
+                                    )
                                 )
-                              - sqr(ref_index)
-                              + sqr(ext_coefficient)
-                              + sqr(Foam::sin(theta_in))
-                            )/2.0
-                        );
+                              + sqr(ref_index)
+                              - sqr(ext_coefficient)
+                              - sqr(Foam::sin(theta_in))/2.0
+                            );
 
-                    const scalar R_s =
-                        (
+                        const scalar beta_laser =
+                            Foam::sqrt
                             (
-                                sqr(alpha_laser)
-                              + sqr(beta_laser)
-                              - 2.0*alpha_laser*Foam::cos(theta_in)
-                              + sqr(Foam::cos(theta_in))
-                            )
-                            /(
-                                sqr(alpha_laser)
-                              + sqr(beta_laser)
-                              + 2.0*alpha_laser*Foam::cos(theta_in)
-                              + sqr(Foam::cos(theta_in))
-                            )
-                        );
+                                (
+                                    Foam::sqrt
+                                    (
+                                        sqr
+                                        (
+                                            sqr(ref_index)
+                                          - sqr(ext_coefficient)
+                                          - sqr(Foam::sin(theta_in))
+                                        )
+                                      + 4.0*sqr(ref_index)*sqr(ext_coefficient)
+                                    )
+                                  - sqr(ref_index)
+                                  + sqr(ext_coefficient)
+                                  + sqr(Foam::sin(theta_in))
+                                )/2.0
+                            );
 
-                    const scalar R_p =
-                        R_s
-                        *(
+                        const scalar R_s =
                             (
-                                sqr(alpha_laser)
-                              + sqr(beta_laser)
-                              - (
-                                    2.0*alpha_laser*Foam::sin(theta_in)
-                                   *Foam::tan(theta_in)
+                                (
+                                    sqr(alpha_laser)
+                                  + sqr(beta_laser)
+                                  - 2.0*alpha_laser*Foam::cos(theta_in)
+                                  + sqr(Foam::cos(theta_in))
                                 )
-                              + (
-                                    sqr(Foam::sin(theta_in))
-                                   *sqr(Foam::tan(theta_in))
+                                /(
+                                    sqr(alpha_laser)
+                                  + sqr(beta_laser)
+                                  + 2.0*alpha_laser*Foam::cos(theta_in)
+                                  + sqr(Foam::cos(theta_in))
                                 )
-                            )
-                           /(
-                                sqr(alpha_laser)
-                              + sqr(beta_laser)
-                              + (
-                                    2.0*alpha_laser*Foam::sin(theta_in)
-                                   *Foam::tan(theta_in)
-                                )
-                              + sqr(Foam::sin(theta_in))*sqr(Foam::tan(theta_in))
-                            )
-                        );
+                            );
 
-                    const scalar absorptivity = 1.0 - ((R_s + R_p)/2.0);
+                        const scalar R_p =
+                            R_s
+                            *(
+                                (
+                                    sqr(alpha_laser)
+                                  + sqr(beta_laser)
+                                  - (
+                                        2.0*alpha_laser*Foam::sin(theta_in)
+                                       *Foam::tan(theta_in)
+                                    )
+                                  + (
+                                        sqr(Foam::sin(theta_in))
+                                       *sqr(Foam::tan(theta_in))
+                                    )
+                                )
+                               /(
+                                    sqr(alpha_laser)
+                                  + sqr(beta_laser)
+                                  + (
+                                        2.0*alpha_laser*Foam::sin(theta_in)
+                                       *Foam::tan(theta_in)
+                                    )
+                                  + sqr(Foam::sin(theta_in))*sqr(Foam::tan(theta_in))
+                                )
+                            );
 
-                    // if (theta_in >= pi/2.0)
-                    // {
-                    //     // Dump half of energy and propogate further - once the
-                    //     // optics is its own function we shoule work out what
-                    //     // pi-theta returns for the absorptivity and pass this
-                    //     // here instead of 0.5
-                    //     deposition_[myCellID] += 0.5*curRay.power_/VI[myCellID];//yDimI[myCellID];
-                    //     curRay.power_ *= 0.5;
-                    // }
-                    // else
-                    // {
-                        deposition_[myCellID] += absorptivity*curRay.power_/VI[myCellID];
+                        const scalar absorptivity = 1.0 - ((R_s + R_p)/2.0);
+
+                        deposition_[myCellID] +=
+                            absorptivity*curRay.power_/VI[myCellID];
                         curRay.power_ *= (1.0 - absorptivity);
                         curRay.direction_ -=
                             (
                                 (
                                     (
-                                        (
-                                            2.0*curRay.direction_
-                                          & nFilteredI[myCellID]
-                                        )/magSqr(nFilteredI[myCellID])
-                                    )
-                                )*nFilteredI[myCellID]
-                            );
-                    // }
-
-                        }
+                                        2.0*curRay.direction_
+                                      & nFilteredI[myCellID]
+                                    )/magSqr(nFilteredI[myCellID])
+                                )
+                            )*nFilteredI[myCellID];
+                    }
                 }
                 else if
-                    (
-                        alphaFilteredI[myCellID] > dep_cutoff
-                     && mag(nFilteredI[myCellID]) < 0.5
-                     && curRay.power_ > SMALL
-                    )
+                (
+                    alphaFilteredI[myCellID] > dep_cutoff
+                 && mag(nFilteredI[myCellID]) < 0.5
+                 && curRay.power_ > SMALL
+                )
+                {
+                    // Ray is in the bulk - deposit energy and reflect back
+                    if (debug)
                     {
-                    
-                    
-                            // Ray is in the bulk - deposit energy and reflect back
-        if (debug)
-        {
-            Info<< "Within the bulk at cell " << myCellID 
-                << ", alpha = " << alphaFilteredI[myCellID]
-                << ", |n| = " << mag(nFilteredI[myCellID])
-                << ", power = " << curRay.power_ << endl;
-        }
-        
-
-                        deposition_[myCellID] += 0.5*curRay.power_/VI[myCellID];;
-                        curRay.direction_ = -curRay.direction_;
-                        curRay.power_ *= 0.5;
-                        curRay.path_.append(curRay.position_);
-                        // break;
+                        Info<< "Within the bulk at cell " << myCellID
+                            << ", alpha = " << alphaFilteredI[myCellID]
+                            << ", |n| = " << mag(nFilteredI[myCellID])
+                            << ", power = " << curRay.power_ << endl;
                     }
-                    else if
-    (
-        alphaFilteredI[myCellID] < dep_cutoff  // In gas/outside material
-     && curRay.power_ > rayPowerAbsTol
-    )
-    {
-    
-    }
-                
+
+                    deposition_[myCellID] += 0.5*curRay.power_/VI[myCellID];
+                    curRay.direction_ = -curRay.direction_;
+                    curRay.power_ *= 0.5;
+                    curRay.path_.append(curRay.position_);
+                    // break;
+                }
+                else if // In gas/outside material
+                (
+                    alphaFilteredI[myCellID] < dep_cutoff
+                    && curRay.power_ > rayPowerAbsTol
+                )
+                {
+                    // Do nothing
+                }
 
                 // Update the ray's path
                 curRay.path_.append(curRay.position_);
@@ -1153,8 +1127,8 @@ else{
 
     deposition_.correctBoundaryConditions();
 
-     const scalar TotalQ = fvc::domainIntegrate(deposition_).value();
-     Info<< "Total Q deposited this timestep: " << TotalQ <<endl;
+    const scalar TotalQ = fvc::domainIntegrate(deposition_).value();
+    Info<< "Total Q deposited this timestep: " << TotalQ <<endl;
 }
 
 
