@@ -23,6 +23,7 @@ License
 #include "findLocalCell.H"
 #include "SortableList.H"
 #include "globalIndex.H"
+#include <chrono>
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -257,6 +258,7 @@ void laserHeatSource::createInitialRays
         rays[i].globalRayIndex_ = i;
         rays[i].currentCell_ = mesh.findCell(rayCoords[i]);
         rays[i].path_.append(rayCoords[i]);
+        rays[i].pathPower_.append(rayPowers[i]);
     }
 }
 
@@ -371,7 +373,9 @@ laserHeatSource::laserHeatSource
     timeVsLaserPosition_(0),
     timeVsLaserPower_(0),
     rayPaths_(0),
+    rayPathPowers_(0),
     vtkTimes_(),
+    vtkFrameCount_(0),
     globalBB_(mesh.bounds())  // Initialize with local bounds first
 {
     Info<< "radialPolarHeatSource = " << radialPolarHeatSource_ << endl;
@@ -409,6 +413,7 @@ laserHeatSource::laserHeatSource
         if (Pstream::master())
         {
             rayPaths_.setSize(laserEntries.size());
+            rayPathPowers_.setSize(laserEntries.size());
         }
 
         forAll(laserEntries, laserI)
@@ -458,6 +463,7 @@ laserHeatSource::laserHeatSource
         // There is no lists of lasers, just one
 
         rayPaths_.setSize(1);
+        rayPathPowers_.setSize(1);
         laserNames_.setSize(1);
         laserDicts_.setSize(1);
         timeVsLaserPosition_.setSize(1);
@@ -771,11 +777,16 @@ void laserHeatSource::updateDeposition
     // the domain or deposit all of their power
     DynamicList<compactRay> remainingGlobalRays(rays);
 
+    // Timing for ray tracing
+    const auto rayTimingStart = std::chrono::steady_clock::now();
+
     // Reset the ray paths list
     if (Pstream::master())
     {
         rayPaths_[laserID].clear();
         rayPaths_[laserID].setSize(rays.size());
+        rayPathPowers_[laserID].clear();
+        rayPathPowers_[laserID].setSize(rays.size());
     }
 
     // Calculate the ray power tolerance as a fraction of the max ray power
@@ -886,6 +897,7 @@ void laserHeatSource::updateDeposition
                 {
                     // Update the ray's path
                     curRay.path_.append(curRay.position_);
+                    curRay.pathPower_.append(curRay.power_);
 
                     // End of life for the ray
                     break;
@@ -947,6 +959,7 @@ void laserHeatSource::updateDeposition
 
                         // Update the ray's path
                         curRay.path_.append(curRay.position_);
+                        curRay.pathPower_.append(curRay.power_);
 
                         // End of life for the ray
                         break;
@@ -1113,6 +1126,7 @@ void laserHeatSource::updateDeposition
 
                     // Update the ray's path
                     curRay.path_.append(curRay.position_);
+                    curRay.pathPower_.append(curRay.power_);
 
                     // End of life for the ray
                     break;
@@ -1120,6 +1134,7 @@ void laserHeatSource::updateDeposition
 
                 // Update the ray's path
                 curRay.path_.append(curRay.position_);
+                curRay.pathPower_.append(curRay.power_);
             }
         }
 
@@ -1139,8 +1154,14 @@ void laserHeatSource::updateDeposition
                 const compactRay& curRay = remainingGlobalRays[rI];
                 const label rayID = curRay.globalRayIndex_;
                 rayPaths_[laserID][rayID] = curRay.path_;
+                rayPathPowers_[laserID][rayID] = curRay.pathPower_;
             }
         }
+
+        const auto rayTimingEnd = std::chrono::steady_clock::now();
+        const double raySeconds =
+            std::chrono::duration<double>(rayTimingEnd - rayTimingStart).count();
+        Info<< "    rayTracingTime = " << raySeconds << " s" << endl;
     }
 
     deposition_.correctBoundaryConditions();
@@ -1168,28 +1189,38 @@ void laserHeatSource::writeRayPathsToVTK()
 
         mkDir(vtkDir);
 
-        // Record this time as having a VTK file
+        // Record this time and frame index
         vtkTimes_.insert(runTime.value());
+
+        // Zero-padded 6-digit frame index for unambiguous ParaView grouping
+        char frameBuf[16];
+        std::snprintf(frameBuf, sizeof(frameBuf), "%06d", vtkFrameCount_);
+        const word frameStr(frameBuf);
+        vtkFrameCount_++;
 
         // Write ray paths to VTK files
         forAll(laserNames_, laserI)
         {
             const fileName vtkFileName
             (
-                vtkDir/"rays_" + laserNames_[laserI] + "_"
-              + Foam::name(runTime.value()) + ".vtk"
+                vtkDir/"rays_" + laserNames_[laserI] + "_" + frameStr + ".vtk"
             );
             Info<< "Writing " << rayPaths_[laserI].size() << " ray paths to "
                 << vtkFileName << endl;
-            writeRayPathsToVTK(rayPaths_[laserI], vtkFileName);
+            writeRayPathsToVTK(rayPaths_[laserI], rayPathPowers_[laserI], vtkFileName);
         }
     }
+
+    // Always update the series file so ParaView shows correct physical times
+    // even if the simulation is stopped or crashes before the end
+    writeRayPathVTKSeriesFile();
 }
 
 
 void laserHeatSource::writeRayPathsToVTK
 (
     const List<DynamicList<point>>& rays,
+    const List<DynamicList<scalar>>& rayPowers,
     const fileName& filename
 )
 {
@@ -1253,6 +1284,32 @@ void laserHeatSource::writeRayPathsToVTK
         // Update offset for next ray
         pointOffset += ray.size();
     }
+
+    // Write per-point scalar fields as POINT_DATA
+    file<< "POINT_DATA " << totalPoints << nl;
+
+    // Power at each point along the ray path
+    file<< "SCALARS power float 1" << nl;
+    file<< "LOOKUP_TABLE default" << nl;
+    forAll(rays, rayI)
+    {
+        const DynamicList<scalar>& powers = rayPowers[rayI];
+        forAll(powers, pointI)
+        {
+            file<< powers[pointI] << nl;
+        }
+    }
+
+    // Ray index — use this in ParaView Threshold filter to isolate individual rays
+    file<< "SCALARS rayIndex int 1" << nl;
+    file<< "LOOKUP_TABLE default" << nl;
+    forAll(rays, rayI)
+    {
+        forAll(rays[rayI], pointI)
+        {
+            file<< rayI << nl;
+        }
+    }
 }
 
 
@@ -1273,7 +1330,7 @@ void laserHeatSource::writeRayPathVTKSeriesFile() const
         // Ensure chronological order
         SortableList<scalar> sortedTimes(times);
 
-        // Write ray paths to VTK files
+        // Write series file for each laser
         forAll(laserNames_, laserI)
         {
             const word& laserName = laserNames_[laserI];
@@ -1282,7 +1339,7 @@ void laserHeatSource::writeRayPathVTKSeriesFile() const
             Info<< "Writing ray path series file: " << seriesFile << nl;
 
             OFstream os(seriesFile);
-            os.precision(12); // good numeric precision for times
+            os.precision(12);
 
             os  << "{\n"
                 << "  \"file-series-version\": \"1.0\",\n"
@@ -1292,11 +1349,12 @@ void laserHeatSource::writeRayPathVTKSeriesFile() const
             {
                 const scalar t = sortedTimes[i];
 
-                // Filenames follow your convention:
-                //   rays_<laserName>_<timeName>.vtk
-                // We reconstruct <timeName> with Foam::name(t).
+                // Filenames use zero-padded frame index matching writeRayPathsToVTK
+                char frameBuf[16];
+                std::snprintf(frameBuf, sizeof(frameBuf), "%06d", i);
+
                 os  << "    { \"name\": \"rays_"
-                    << laserName << "_" << Foam::name(t)
+                    << laserName << "_" << word(frameBuf)
                     << ".vtk\", \"time\": " << t << " }";
 
                 if (i+1 < sortedTimes.size()) os << ",";

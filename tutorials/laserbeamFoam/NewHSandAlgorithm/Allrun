@@ -3,9 +3,21 @@
 # Source tutorial run functions
 . $WM_PROJECT_DIR/bin/tools/RunFunctions
 
+# Allow mpirun as root (Docker)
+export OMPI_ALLOW_RUN_AS_ROOT=1
+export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+
+NPROCS=$(foamDictionary -entry numberOfSubdomains -value system/decomposeParDict)
+
 echo "Copying 'initial' to 0"
 cp -r initial 0
 
 runApplication blockMesh
 runApplication setFields
-runApplication laserbeamFoam
+
+if [ "$NPROCS" -gt 1 ]; then
+    runApplication decomposePar
+    runParallel laserbeamFoam
+else
+    runApplication laserbeamFoam
+fi

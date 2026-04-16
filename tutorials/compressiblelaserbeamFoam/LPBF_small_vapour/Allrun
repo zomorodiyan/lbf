@@ -3,6 +3,9 @@
 # Source tutorial run functions
 . $WM_PROJECT_DIR/bin/tools/RunFunctions
 
+# Number of processors (read from decomposeParDict)
+NPROCS=$(foamDictionary -entry numberOfSubdomains -value system/decomposeParDict)
+
 echo "Copying 'initial' to 0"
 cp -r initial 0
 
@@ -17,4 +20,10 @@ fi
 runApplication blockMesh
 runApplication setSolidFraction -compressible -alpha.phase1 "alpha.metal1" -alpha.phase2 "alpha.air"
 runApplication transformPoints -rotate '((0 1 0) (0 0 1))'
-runApplication compressibleLaserbeamFoam
+
+if [ "$NPROCS" -gt 1 ]; then
+    runApplication decomposePar
+    runParallel compressibleLaserbeamFoam
+else
+    runApplication compressibleLaserbeamFoam
+fi

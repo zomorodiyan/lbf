@@ -80,6 +80,9 @@ class compactRay
             //- List of all locations the ray has visited
             DynamicList<point> path_;
 
+            //- Power at each path point (same size as path_)
+            DynamicList<scalar> pathPower_;
+
 
     // Public functions
 
@@ -112,6 +115,8 @@ class compactRay
             bounceCount_ = 0;
             globalRayIndex_ = -1;
             active_ = true;
+            path_.clear();
+            pathPower_.clear();
         }
 
         //- Compare equals
@@ -125,7 +130,8 @@ class compactRay
              && bounceCount_ == other.bounceCount_
              && globalRayIndex_ == other.globalRayIndex_
              && active_ == other.active_
-             && path_ == other.path_;
+             && path_ == other.path_
+             && pathPower_ == other.pathPower_;
         }
 
         //- Compare not equals
@@ -144,7 +150,8 @@ class compactRay
                        << ray.bounceCount_
                        << ray.globalRayIndex_
                        << ray.active_
-                       << ray.path_;
+                       << ray.path_
+                       << ray.pathPower_;
         }
 
         //- Input stream operator
@@ -157,7 +164,8 @@ class compactRay
                        >> ray.bounceCount_
                        >> ray.globalRayIndex_
                        >> ray.active_
-                       >> ray.path_;
+                       >> ray.path_
+                       >> ray.pathPower_;
         }
 };
 
