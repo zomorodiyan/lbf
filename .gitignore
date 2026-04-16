@@ -51,10 +51,9 @@ tutorials/laserbeamFoam/testrun*/*.gif
 *.log
 *.out
 
-# Compiled / generated output in results/
-results/*.pdf
-results/*.png
-results/paraview/
+# Untracked working directories
+results/
+report/
 
 # editor and misc backup files - anywhere
 *~
