@@ -4,6 +4,8 @@ tutorialsTest
 # VTK files
 **/*.vtk
 **/*.VTK
+**/*.vtk.series
+tutorials/laserbeamFoam/NewHSandAlgorithm/VTKs/
 
 # Build files
 **/log.Allwmake
