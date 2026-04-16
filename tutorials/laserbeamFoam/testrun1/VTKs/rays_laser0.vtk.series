@@ -1,0 +1,25 @@
+{
+  "file-series-version": "1.0",
+  "files": [
+    { "name": "rays_laser0_3e-05.vtk", "time": 3e-05 },
+    { "name": "rays_laser0_6e-05.vtk", "time": 6e-05 },
+    { "name": "rays_laser0_9e-05.vtk", "time": 9e-05 },
+    { "name": "rays_laser0_0.00012.vtk", "time": 0.00012 },
+    { "name": "rays_laser0_0.00015.vtk", "time": 0.00015 },
+    { "name": "rays_laser0_0.00018.vtk", "time": 0.00018 },
+    { "name": "rays_laser0_0.00021.vtk", "time": 0.00021 },
+    { "name": "rays_laser0_0.00024.vtk", "time": 0.00024 },
+    { "name": "rays_laser0_0.00027.vtk", "time": 0.00027 },
+    { "name": "rays_laser0_0.0003.vtk", "time": 0.0003 },
+    { "name": "rays_laser0_0.00033.vtk", "time": 0.00033 },
+    { "name": "rays_laser0_0.00036.vtk", "time": 0.00036 },
+    { "name": "rays_laser0_0.00039.vtk", "time": 0.00039 },
+    { "name": "rays_laser0_0.00042.vtk", "time": 0.00042 },
+    { "name": "rays_laser0_0.00045.vtk", "time": 0.00045 },
+    { "name": "rays_laser0_0.00048.vtk", "time": 0.00048 },
+    { "name": "rays_laser0_0.00051.vtk", "time": 0.00051 },
+    { "name": "rays_laser0_0.00054.vtk", "time": 0.00054 },
+    { "name": "rays_laser0_0.00057.vtk", "time": 0.00057 },
+    { "name": "rays_laser0_0.0006.vtk", "time": 0.0006 }
+  ]
+}

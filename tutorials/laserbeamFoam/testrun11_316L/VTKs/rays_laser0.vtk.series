@@ -1,0 +1,513 @@
+{
+  "file-series-version": "1.0",
+  "files": [
+    {
+      "name": "rays_laser0_1e-05.vtk",
+      "time": 1e-05
+    },
+    {
+      "name": "rays_laser0_2e-05.vtk",
+      "time": 2e-05
+    },
+    {
+      "name": "rays_laser0_3e-05.vtk",
+      "time": 3e-05
+    },
+    {
+      "name": "rays_laser0_4e-05.vtk",
+      "time": 4e-05
+    },
+    {
+      "name": "rays_laser0_5e-05.vtk",
+      "time": 5e-05
+    },
+    {
+      "name": "rays_laser0_6e-05.vtk",
+      "time": 6e-05
+    },
+    {
+      "name": "rays_laser0_7e-05.vtk",
+      "time": 7e-05
+    },
+    {
+      "name": "rays_laser0_8e-05.vtk",
+      "time": 8e-05
+    },
+    {
+      "name": "rays_laser0_9e-05.vtk",
+      "time": 9e-05
+    },
+    {
+      "name": "rays_laser0_0.0001.vtk",
+      "time": 0.0001
+    },
+    {
+      "name": "rays_laser0_0.00011.vtk",
+      "time": 0.00011
+    },
+    {
+      "name": "rays_laser0_0.00012.vtk",
+      "time": 0.00012
+    },
+    {
+      "name": "rays_laser0_0.00013.vtk",
+      "time": 0.00013
+    },
+    {
+      "name": "rays_laser0_0.00014.vtk",
+      "time": 0.00014
+    },
+    {
+      "name": "rays_laser0_0.00015.vtk",
+      "time": 0.00015
+    },
+    {
+      "name": "rays_laser0_0.00016.vtk",
+      "time": 0.00016
+    },
+    {
+      "name": "rays_laser0_0.00017.vtk",
+      "time": 0.00017
+    },
+    {
+      "name": "rays_laser0_0.00018.vtk",
+      "time": 0.00018
+    },
+    {
+      "name": "rays_laser0_0.00019.vtk",
+      "time": 0.00019
+    },
+    {
+      "name": "rays_laser0_0.0002.vtk",
+      "time": 0.0002
+    },
+    {
+      "name": "rays_laser0_0.00021.vtk",
+      "time": 0.00021
+    },
+    {
+      "name": "rays_laser0_0.00022.vtk",
+      "time": 0.00022
+    },
+    {
+      "name": "rays_laser0_0.00023.vtk",
+      "time": 0.00023
+    },
+    {
+      "name": "rays_laser0_0.00024.vtk",
+      "time": 0.00024
+    },
+    {
+      "name": "rays_laser0_0.00025.vtk",
+      "time": 0.00025
+    },
+    {
+      "name": "rays_laser0_0.00026.vtk",
+      "time": 0.00026
+    },
+    {
+      "name": "rays_laser0_0.00027.vtk",
+      "time": 0.00027
+    },
+    {
+      "name": "rays_laser0_0.00028.vtk",
+      "time": 0.00028
+    },
+    {
+      "name": "rays_laser0_0.00029.vtk",
+      "time": 0.00029
+    },
+    {
+      "name": "rays_laser0_0.0003.vtk",
+      "time": 0.0003
+    },
+    {
+      "name": "rays_laser0_0.00031.vtk",
+      "time": 0.00031
+    },
+    {
+      "name": "rays_laser0_0.00032.vtk",
+      "time": 0.00032
+    },
+    {
+      "name": "rays_laser0_0.00033.vtk",
+      "time": 0.00033
+    },
+    {
+      "name": "rays_laser0_0.00034.vtk",
+      "time": 0.00034
+    },
+    {
+      "name": "rays_laser0_0.00035.vtk",
+      "time": 0.00035
+    },
+    {
+      "name": "rays_laser0_0.00036.vtk",
+      "time": 0.00036
+    },
+    {
+      "name": "rays_laser0_0.00037.vtk",
+      "time": 0.00037
+    },
+    {
+      "name": "rays_laser0_0.00038.vtk",
+      "time": 0.00038
+    },
+    {
+      "name": "rays_laser0_0.00039.vtk",
+      "time": 0.00039
+    },
+    {
+      "name": "rays_laser0_0.0004.vtk",
+      "time": 0.0004
+    },
+    {
+      "name": "rays_laser0_0.00041.vtk",
+      "time": 0.00041
+    },
+    {
+      "name": "rays_laser0_0.00042.vtk",
+      "time": 0.00042
+    },
+    {
+      "name": "rays_laser0_0.00043.vtk",
+      "time": 0.00043
+    },
+    {
+      "name": "rays_laser0_0.00044.vtk",
+      "time": 0.00044
+    },
+    {
+      "name": "rays_laser0_0.00045.vtk",
+      "time": 0.00045
+    },
+    {
+      "name": "rays_laser0_0.00046.vtk",
+      "time": 0.00046
+    },
+    {
+      "name": "rays_laser0_0.00047.vtk",
+      "time": 0.00047
+    },
+    {
+      "name": "rays_laser0_0.00048.vtk",
+      "time": 0.00048
+    },
+    {
+      "name": "rays_laser0_0.00049.vtk",
+      "time": 0.00049
+    },
+    {
+      "name": "rays_laser0_0.0005.vtk",
+      "time": 0.0005
+    },
+    {
+      "name": "rays_laser0_0.00051.vtk",
+      "time": 0.00051
+    },
+    {
+      "name": "rays_laser0_0.00052.vtk",
+      "time": 0.00052
+    },
+    {
+      "name": "rays_laser0_0.00053.vtk",
+      "time": 0.00053
+    },
+    {
+      "name": "rays_laser0_0.00054.vtk",
+      "time": 0.00054
+    },
+    {
+      "name": "rays_laser0_0.00055.vtk",
+      "time": 0.00055
+    },
+    {
+      "name": "rays_laser0_0.00056.vtk",
+      "time": 0.00056
+    },
+    {
+      "name": "rays_laser0_0.00057.vtk",
+      "time": 0.00057
+    },
+    {
+      "name": "rays_laser0_0.00058.vtk",
+      "time": 0.00058
+    },
+    {
+      "name": "rays_laser0_0.00059.vtk",
+      "time": 0.00059
+    },
+    {
+      "name": "rays_laser0_0.0006.vtk",
+      "time": 0.0006
+    },
+    {
+      "name": "rays_laser0_0.00061.vtk",
+      "time": 0.00061
+    },
+    {
+      "name": "rays_laser0_0.00062.vtk",
+      "time": 0.00062
+    },
+    {
+      "name": "rays_laser0_0.00063.vtk",
+      "time": 0.00063
+    },
+    {
+      "name": "rays_laser0_0.00064.vtk",
+      "time": 0.00064
+    },
+    {
+      "name": "rays_laser0_0.00065.vtk",
+      "time": 0.00065
+    },
+    {
+      "name": "rays_laser0_0.00066.vtk",
+      "time": 0.00066
+    },
+    {
+      "name": "rays_laser0_0.00067.vtk",
+      "time": 0.00067
+    },
+    {
+      "name": "rays_laser0_0.00068.vtk",
+      "time": 0.00068
+    },
+    {
+      "name": "rays_laser0_0.00069.vtk",
+      "time": 0.00069
+    },
+    {
+      "name": "rays_laser0_0.0007.vtk",
+      "time": 0.0007
+    },
+    {
+      "name": "rays_laser0_0.00071.vtk",
+      "time": 0.00071
+    },
+    {
+      "name": "rays_laser0_0.00072.vtk",
+      "time": 0.00072
+    },
+    {
+      "name": "rays_laser0_0.00073.vtk",
+      "time": 0.00073
+    },
+    {
+      "name": "rays_laser0_0.00074.vtk",
+      "time": 0.00074
+    },
+    {
+      "name": "rays_laser0_0.00075.vtk",
+      "time": 0.00075
+    },
+    {
+      "name": "rays_laser0_0.00076.vtk",
+      "time": 0.00076
+    },
+    {
+      "name": "rays_laser0_0.00077.vtk",
+      "time": 0.00077
+    },
+    {
+      "name": "rays_laser0_0.00078.vtk",
+      "time": 0.00078
+    },
+    {
+      "name": "rays_laser0_0.00079.vtk",
+      "time": 0.00079
+    },
+    {
+      "name": "rays_laser0_0.0008.vtk",
+      "time": 0.0008
+    },
+    {
+      "name": "rays_laser0_0.00081.vtk",
+      "time": 0.00081
+    },
+    {
+      "name": "rays_laser0_0.00082.vtk",
+      "time": 0.00082
+    },
+    {
+      "name": "rays_laser0_0.00083.vtk",
+      "time": 0.00083
+    },
+    {
+      "name": "rays_laser0_0.00084.vtk",
+      "time": 0.00084
+    },
+    {
+      "name": "rays_laser0_0.00085.vtk",
+      "time": 0.00085
+    },
+    {
+      "name": "rays_laser0_0.00086.vtk",
+      "time": 0.00086
+    },
+    {
+      "name": "rays_laser0_0.00087.vtk",
+      "time": 0.00087
+    },
+    {
+      "name": "rays_laser0_0.00088.vtk",
+      "time": 0.00088
+    },
+    {
+      "name": "rays_laser0_0.00089.vtk",
+      "time": 0.00089
+    },
+    {
+      "name": "rays_laser0_0.0009.vtk",
+      "time": 0.0009
+    },
+    {
+      "name": "rays_laser0_0.00091.vtk",
+      "time": 0.00091
+    },
+    {
+      "name": "rays_laser0_0.00092.vtk",
+      "time": 0.00092
+    },
+    {
+      "name": "rays_laser0_0.00093.vtk",
+      "time": 0.00093
+    },
+    {
+      "name": "rays_laser0_0.00094.vtk",
+      "time": 0.00094
+    },
+    {
+      "name": "rays_laser0_0.00095.vtk",
+      "time": 0.00095
+    },
+    {
+      "name": "rays_laser0_0.00096.vtk",
+      "time": 0.00096
+    },
+    {
+      "name": "rays_laser0_0.00097.vtk",
+      "time": 0.00097
+    },
+    {
+      "name": "rays_laser0_0.00098.vtk",
+      "time": 0.00098
+    },
+    {
+      "name": "rays_laser0_0.00099.vtk",
+      "time": 0.00099
+    },
+    {
+      "name": "rays_laser0_0.001.vtk",
+      "time": 0.001
+    },
+    {
+      "name": "rays_laser0_0.00101.vtk",
+      "time": 0.00101
+    },
+    {
+      "name": "rays_laser0_0.00102.vtk",
+      "time": 0.00102
+    },
+    {
+      "name": "rays_laser0_0.00103.vtk",
+      "time": 0.00103
+    },
+    {
+      "name": "rays_laser0_0.00104.vtk",
+      "time": 0.00104
+    },
+    {
+      "name": "rays_laser0_0.00105.vtk",
+      "time": 0.00105
+    },
+    {
+      "name": "rays_laser0_0.00106.vtk",
+      "time": 0.00106
+    },
+    {
+      "name": "rays_laser0_0.00107.vtk",
+      "time": 0.00107
+    },
+    {
+      "name": "rays_laser0_0.00108.vtk",
+      "time": 0.00108
+    },
+    {
+      "name": "rays_laser0_0.00109.vtk",
+      "time": 0.00109
+    },
+    {
+      "name": "rays_laser0_0.0011.vtk",
+      "time": 0.0011
+    },
+    {
+      "name": "rays_laser0_0.00111.vtk",
+      "time": 0.00111
+    },
+    {
+      "name": "rays_laser0_0.00112.vtk",
+      "time": 0.00112
+    },
+    {
+      "name": "rays_laser0_0.00113.vtk",
+      "time": 0.00113
+    },
+    {
+      "name": "rays_laser0_0.00114.vtk",
+      "time": 0.00114
+    },
+    {
+      "name": "rays_laser0_0.00115.vtk",
+      "time": 0.00115
+    },
+    {
+      "name": "rays_laser0_0.00116.vtk",
+      "time": 0.00116
+    },
+    {
+      "name": "rays_laser0_0.00117.vtk",
+      "time": 0.00117
+    },
+    {
+      "name": "rays_laser0_0.00118.vtk",
+      "time": 0.00118
+    },
+    {
+      "name": "rays_laser0_0.00119.vtk",
+      "time": 0.00119
+    },
+    {
+      "name": "rays_laser0_0.0012.vtk",
+      "time": 0.0012
+    },
+    {
+      "name": "rays_laser0_0.00121.vtk",
+      "time": 0.00121
+    },
+    {
+      "name": "rays_laser0_0.00122.vtk",
+      "time": 0.00122
+    },
+    {
+      "name": "rays_laser0_0.00123.vtk",
+      "time": 0.00123
+    },
+    {
+      "name": "rays_laser0_0.00124.vtk",
+      "time": 0.00124
+    },
+    {
+      "name": "rays_laser0_0.00125.vtk",
+      "time": 0.00125
+    },
+    {
+      "name": "rays_laser0_0.00126.vtk",
+      "time": 0.00126
+    },
+    {
+      "name": "rays_laser0_0.00127.vtk",
+      "time": 0.00127
+    }
+  ]
+}

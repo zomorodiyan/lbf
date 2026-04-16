@@ -1,0 +1,7 @@
+{
+  "file-series-version": "1.0",
+  "files": [
+    { "name": "rays_laser0_3.5e-05.vtk", "time": 3.5e-05 },
+    { "name": "rays_laser0_7e-05.vtk", "time": 7e-05 }
+  ]
+}

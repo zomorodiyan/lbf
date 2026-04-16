@@ -28,6 +28,34 @@ neighbour
 owner
 points
 
+# Generated mesh (produced by blockMesh / reconstructParMesh)
+**/constant/polyMesh/
+
+# Duplicate of initial/ created by some Allclean scripts
+zero
+
+# ParaView project file (auto-generated, empty marker file)
+*.foam
+
+# Windows Zone Identifier metadata (created when files are downloaded on Windows)
+*:Zone.Identifier
+
+# ParaView export frames and animations in testrun dirs (any depth)
+tutorials/laserbeamFoam/testrun*/**/*.png
+tutorials/laserbeamFoam/testrun*/**/*.gif
+tutorials/laserbeamFoam/testrun*/*.png
+tutorials/laserbeamFoam/testrun*/*.gif
+
+# LaTeX build artefacts
+*.aux
+*.log
+*.out
+
+# Compiled / generated output in results/
+results/*.pdf
+results/*.png
+results/paraview/
+
 # editor and misc backup files - anywhere
 *~
 .*~
