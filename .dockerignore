@@ -3,3 +3,15 @@
 *.dep
 lnInclude
 log.*
+
+# Tutorial case data — not needed to build the solver
+tutorials/laserbeamFoam/testrun*/0.*
+tutorials/laserbeamFoam/testrun*/processor*/
+tutorials/laserbeamFoam/testrun*/VTKs/*.vtk
+tutorials/laserbeamFoam/testrun*/gif*/
+tutorials/laserbeamFoam/testrun*/log.*
+tutorials/laserbeamFoam/testrun*/results/
+tutorials/laserbeamFoam/*.gif
+tutorials/laserbeamFoam/*.mp4
+tutorials/laserbeamFoam/*.png
+tutorials/laserbeamFoam/*.pvsm

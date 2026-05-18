@@ -29,6 +29,8 @@ RUN git clone --depth 1 https://github.com/CFDEMproject/LIGGGHTS-PUBLIC.git \
     && ln -s /opt/LIGGGHTS-PUBLIC/src/lmp_auto /usr/local/bin/liggghts
 
 # ---- Build laserbeamFoam ---------------------------------------------------
+# Pass --build-arg CACHE_BUST=$(date +%s) to force a fresh copy and recompile.
+ARG CACHE_BUST=1
 COPY . /opt/laserbeamFoam
 
 RUN bash -c '\
