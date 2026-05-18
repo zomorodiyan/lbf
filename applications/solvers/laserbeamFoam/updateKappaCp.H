@@ -28,4 +28,14 @@
 
     kappa.correctBoundaryConditions();
     cp.correctBoundaryConditions();
+
+    if (usePolySigma)
+    {
+        scalarField& dSigmadTI = dSigmadT;
+        forAll(TI, celli)
+        {
+            dSigmadTI[celli] = poly_sigmaPtr->derivative(TI[celli]);
+        }
+        dSigmadT.correctBoundaryConditions();
+    }
 }

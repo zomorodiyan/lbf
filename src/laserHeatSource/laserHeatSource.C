@@ -374,8 +374,6 @@ laserHeatSource::laserHeatSource
     timeVsLaserPower_(0),
     rayPaths_(0),
     rayPathPowers_(0),
-    vtkTimes_(),
-    vtkFrameCount_(0),
     globalBB_(mesh.bounds())  // Initialize with local bounds first
 {
     Info<< "radialPolarHeatSource = " << radialPolarHeatSource_ << endl;
@@ -1189,21 +1187,12 @@ void laserHeatSource::writeRayPathsToVTK()
 
         mkDir(vtkDir);
 
-        // Record this time and frame index
-        vtkTimes_.insert(runTime.value());
-
-        // Zero-padded 6-digit frame index for unambiguous ParaView grouping
-        char frameBuf[16];
-        std::snprintf(frameBuf, sizeof(frameBuf), "%06d", vtkFrameCount_);
-        const word frameStr(frameBuf);
-        vtkFrameCount_++;
-
-        // Write ray paths to VTK files
+        // Write ray paths to VTK files named by simulation time
         forAll(laserNames_, laserI)
         {
             const fileName vtkFileName
             (
-                vtkDir/"rays_" + laserNames_[laserI] + "_" + frameStr + ".vtk"
+                vtkDir/"rays_" + laserNames_[laserI] + "_" + runTime.timeName() + ".vtk"
             );
             Info<< "Writing " << rayPaths_[laserI].size() << " ray paths to "
                 << vtkFileName << endl;
@@ -1324,16 +1313,50 @@ void laserHeatSource::writeRayPathVTKSeriesFile() const
           ? runTime.path()/".."/"VTKs"
           : runTime.path()/"VTKs";
 
-        // Get the list of times when VTK files were written
-        const scalarList times = vtkTimes_.toc();
-
-        // Ensure chronological order
-        SortableList<scalar> sortedTimes(times);
-
-        // Write series file for each laser
+        // Write series file for each laser by scanning actual files on disk.
+        // Scanning rather than using in-memory vtkTimes_ means the series is
+        // always complete even after a restart.
         forAll(laserNames_, laserI)
         {
             const word& laserName = laserNames_[laserI];
+            const word prefix = "rays_" + laserName + "_";
+
+            // Collect (time, filename) pairs from every matching .vtk file
+            SortableList<scalar> sortedTimes(0);
+            List<word> sortedNames(0);
+
+            if (isDir(vtkDir))
+            {
+                fileNameList dirFiles = readDir(vtkDir, fileName::FILE);
+                forAll(dirFiles, fi)
+                {
+                    const word fname(dirFiles[fi]);
+                    if (
+                        fname.startsWith(prefix)
+                     && fname.endsWith(".vtk")
+                     && !fname.endsWith(".series")
+                    )
+                    {
+                        const word timeStr =
+                            fname.substr(prefix.size(), fname.size() - prefix.size() - 4);
+                        IStringStream iss(timeStr);
+                        scalar t;
+                        if (iss >> t)
+                        {
+                            label n = sortedTimes.size();
+                            sortedTimes.append(t);
+                            sortedNames.append(fname);
+                            (void)n;
+                        }
+                    }
+                }
+            }
+
+            sortedTimes.sort();
+            // Re-order names to match sorted times
+            const labelList& order = sortedTimes.indices();
+            List<word> orderedNames(sortedNames.size());
+            forAll(order, i) { orderedNames[i] = sortedNames[order[i]]; }
 
             const fileName seriesFile = vtkDir/"rays_" + laserName + ".vtk.series";
             Info<< "Writing ray path series file: " << seriesFile << nl;
@@ -1345,18 +1368,10 @@ void laserHeatSource::writeRayPathVTKSeriesFile() const
                 << "  \"file-series-version\": \"1.0\",\n"
                 << "  \"files\": [\n";
 
-            for (label i = 0; i < sortedTimes.size(); ++i)
+            forAll(sortedTimes, i)
             {
-                const scalar t = sortedTimes[i];
-
-                // Filenames use zero-padded frame index matching writeRayPathsToVTK
-                char frameBuf[16];
-                std::snprintf(frameBuf, sizeof(frameBuf), "%06d", i);
-
-                os  << "    { \"name\": \"rays_"
-                    << laserName << "_" << word(frameBuf)
-                    << ".vtk\", \"time\": " << t << " }";
-
+                os  << "    { \"name\": \"" << orderedNames[i]
+                    << "\", \"time\": " << sortedTimes[i] << " }";
                 if (i+1 < sortedTimes.size()) os << ",";
                 os << "\n";
             }

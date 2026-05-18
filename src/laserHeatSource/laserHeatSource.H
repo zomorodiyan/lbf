@@ -109,12 +109,6 @@ class laserHeatSource
         //- Record the ray power at each path point for each laser
         List<List<DynamicList<scalar>>> rayPathPowers_;
 
-        //- Record of times when VTK files were written
-        HashSet<scalar> vtkTimes_;
-
-        //- Zero-based frame counter for VTK filename indexing
-        label vtkFrameCount_;
-
         //- Global bounding box of the mesh
         boundBox globalBB_;
 

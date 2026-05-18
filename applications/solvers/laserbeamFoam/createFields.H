@@ -178,11 +178,38 @@ const dimensionedScalar beta2
     transportPropertiesGas//.lookup("beta")
 );
 
+// If poly_sigma is present, dσ/dT is evaluated per cell each timestep via
+// the polynomial derivative.  Otherwise fall back to the constant scalar.
+const bool usePolySigma = transportProperties.found("poly_sigma");
+
+autoPtr<Polynomial<8>> poly_sigmaPtr;
+if (usePolySigma)
+{
+    poly_sigmaPtr.reset(new Polynomial<8>(transportProperties.lookup("poly_sigma")));
+    Info << "Marangoni: temperature-dependent dσ/dT via poly_sigma" << nl << endl;
+}
+
 const dimensionedScalar Marangoni_Constant
 (
     "Marangoni_Constant",
     dimensionSet(1, 0, -2, -1, 0),
-    transportProperties//.lookup("dsigmadT")
+    usePolySigma
+        ? scalar(0)
+        : readScalar(transportProperties.lookup("Marangoni_Constant"))
+);
+
+volScalarField dSigmadT
+(
+    IOobject
+    (
+        "dSigmadT",
+        runTime.timeName(),
+        mesh,
+        IOobject::NO_READ,
+        IOobject::NO_WRITE
+    ),
+    mesh,
+    Marangoni_Constant
 );
 
 const dimensionedScalar p0
