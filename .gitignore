@@ -47,6 +47,10 @@ tutorials/laserbeamFoam/testrun*/**/*.png
 tutorials/laserbeamFoam/testrun*/**/*.gif
 tutorials/laserbeamFoam/testrun*/*.png
 tutorials/laserbeamFoam/testrun*/*.gif
+tutorials/laserbeamFoam/plc/testrun*/**/*.png
+tutorials/laserbeamFoam/plc/testrun*/**/*.gif
+tutorials/laserbeamFoam/plc/testrun*/*.png
+tutorials/laserbeamFoam/plc/testrun*/*.gif
 
 # LaTeX build artefacts
 *.aux

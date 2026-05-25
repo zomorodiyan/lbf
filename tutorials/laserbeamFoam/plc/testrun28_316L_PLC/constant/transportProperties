@@ -1,0 +1,73 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2506                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      transportProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Interface tracking method: isoAdvector or MULES
+interfaceTrackingScheme isoAdvector;
+
+phases          (metal gas);
+
+metal
+{
+    transportModel  Newtonian;
+nu              5e-07;
+
+rho             8000;
+
+	Tsolidus 1658;
+	Tliquidus 1723;
+    LatentHeat 2.7e5;
+    beta    5.0e-6;
+    poly_kappa   (11.5 0.00307 0 0 0 0 0 0);  // linear: ~16.4 W/(m.K) at 300K, ~25 W/(m.K) at 1800K
+    poly_cp   (500 0.0 0 0 0 0 0 0);
+    elec_resistivity	1.6384e-7;  // A0=10% at normal incidence (Drude-Fresnel, lambda=1.064um)
+}
+
+gas
+{
+    transportModel  Newtonian;
+
+nu              1.48e-05;
+
+rho             1;
+
+    poly_kappa   (0.04 0 0 0 0 0 0 0);
+    poly_cp   (520 0.0 0 0 0 0 0 0);
+    
+    Tsolidus    1.0;
+    Tliquidus   10.0;
+    LatentHeat  1;
+    beta    4.0e-5;
+}
+
+
+
+sigma            1.7675;   // Morohoshi 2013 at T=1873K, 316L+PLC eta=0.01 — CSF term (constant)
+
+// Full Morohoshi σ(T) polynomial for 316L+PLC eta=0.01 (wC=0.039, wO=0.00502)
+// σ in N/m, T in K.  Used only to compute dσ/dT per cell for Marangoni term.
+// T* (dσ/dT=0) ≈ 1963 K — well inside melt pool range:
+// Below ~1963 K: dσ/dT > 0 (inward — cool liquid near solidification front)
+// Above ~1963 K: dσ/dT < 0 (outward — hot region near keyhole)
+// Competing Marangoni vortices — qualitatively different from constant-value cases.
+poly_sigma (-1.074883e+02  2.405987e-01 -2.194800e-04  1.064419e-07 -2.898656e-11  4.201272e-15 -2.531346e-19  0.000000e+00);
+p0	1e5;
+Tvap	3068;
+Mm	0.05;
+LatentHeatVap 7.45e6;
+emS                     0.4;
+emL                     0.1;
+TRef                    TRef [0 0 0 1 0 0 0]   300;
+// ************************************************************************* //
