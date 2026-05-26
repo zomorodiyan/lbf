@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>laserbeamFoam — Simulation Guide</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 860px;
+    margin: 40px auto;
+    padding: 0 24px;
+    color: #222;
+    line-height: 1.6;
+  }
+  h1 { border-bottom: 2px solid #0066cc; padding-bottom: 8px; color: #003d7a; }
+  h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2em; color: #0055aa; }
+  h3 { color: #333; margin-top: 1.5em; }
+  code {
+    background: #f4f4f4;
+    border-radius: 3px;
+    padding: 2px 5px;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.9em;
+  }
+  pre {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    border-radius: 6px;
+    padding: 16px;
+    overflow-x: auto;
+    line-height: 1.5;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    color: inherit;
+    font-size: 0.88em;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1em 0;
+  }
+  th, td {
+    border: 1px solid #ccc;
+    padding: 8px 12px;
+    text-align: left;
+  }
+  th { background: #eef2f7; font-weight: 600; }
+  tr:nth-child(even) { background: #f9f9f9; }
+  blockquote {
+    border-left: 4px solid #0066cc;
+    margin: 0;
+    padding: 8px 16px;
+    background: #f0f6ff;
+    color: #444;
+  }
+  strong { color: #111; }
+  hr { border: none; border-top: 1px solid #ddd; margin: 2em 0; }
+  a { color: #0066cc; }
+</style>
+</head>
+<body>
+<h1>Running laserbeamFoam Simulations</h1>
+<p>All operations run inside the <code>lbf3</code> Docker container, which mounts the repo at <code>/workspace</code>.
+All commands below assume you are running from the <strong>repo root</strong> (<code>cd ~/lbf3</code> first).</p>
+<p><strong>Case paths:</strong>
+- VDEP cases (active): <code>tutorials/laserbeamFoam/CASE</code> — e.g. <code>testrun32_vdep_3_Al</code>
+- PLC reference cases: <code>tutorials/laserbeamFoam/plc/CASE</code></p>
+<p>Replace <code>CASE</code> with the actual case directory name throughout this document.</p>
+<hr />
+<h2>Prerequisites</h2>
+<h3>System requirements</h3>
+<ul>
+<li>Ubuntu 20.04 or 22.04</li>
+<li>At least <strong>32 CPU cores</strong> and <strong>64 GB RAM</strong> (cases are configured for 32 cores and ~76 GB)</li>
+<li>~50 GB free disk space per case (processor directories are large)</li>
+</ul>
+<h3>Docker</h3>
+<pre><code class="language-bash">sudo apt-get update
+sudo apt-get install -y docker.io
+sudo usermod -aG docker $USER
+newgrp docker          # apply group change without logging out
+docker run --rm hello-world   # verify
+</code></pre>
+<h3>ParaView (for post-processing)</h3>
+<pre><code class="language-bash">sudo apt-get install -y paraview
+</code></pre>
+<hr />
+<h2>Get the repository</h2>
+<p>Fork <a href="https://github.com/zomorodiyan/lbf">Mehrdad's repo</a> on GitHub, then clone your fork:</p>
+<pre><code class="language-bash">git clone https://github.com/YOUR_USERNAME/lbf.git ~/lbf3
+cd ~/lbf3
+</code></pre>
+<hr />
+<h2>Build the Docker image</h2>
+<p>The solver binary lives inside the image; only needed once (and after any source changes).
+<code>CACHE_BUST</code> forces Docker to re-compile while reusing the cached OS and LIGGGHTS layers.</p>
+<pre><code class="language-bash">cd ~/lbf3
+docker build --build-arg CACHE_BUST=$(date +%s) -t lbf3 .
+</code></pre>
+<p>This takes ~10–20 minutes the first time.</p>
+<hr />
+<h2>Recommended starting case</h2>
+<p><strong><code>testrun32_vdep_3_Al</code></strong> — AlSi10Mg, 500 W, 1.5 m/s, 35 µm beam radius, 32 cores.
+This is the baseline VDEP case to start from.</p>
+<hr />
+<h2>Run</h2>
+<pre><code class="language-bash">docker run --rm --shm-size=32g --ulimit memlock=-1 --ulimit stack=67108864 \
+  --ipc=host --cpus=32 --memory=76g \
+  -v $(pwd):/workspace lbf3 bash -lc \
+  &quot;cd /workspace/tutorials/laserbeamFoam/CASE &amp;&amp; bash ./Allrun &amp;&amp; echo RUN_COMPLETE&quot;
+</code></pre>
+<p>Adjust <code>--memory=76g</code> down if your workstation has less RAM (minimum ~48g for 32-core cases).</p>
+<p>Tail the log while it runs (in a second terminal):</p>
+<pre><code class="language-bash">tail -f tutorials/laserbeamFoam/CASE/log.laserbeamFoam
+</code></pre>
+<p>After the run, fix ownership if files are owned by root:</p>
+<pre><code class="language-bash">sudo chown -R &quot;$(id -u):$(id -g)&quot; tutorials/laserbeamFoam/CASE
+</code></pre>
+<hr />
+<h2>Pause</h2>
+<p>Signal a clean stop (OpenFOAM finishes the current timestep before exiting):</p>
+<pre><code class="language-bash">docker exec &lt;container_name&gt; bash -lc \
+  &quot;cd /workspace/tutorials/laserbeamFoam/CASE &amp;&amp; \
+   foamDictionary -entry stopAt -set writeNow system/controlDict&quot;
+docker wait &lt;container_name&gt;
+</code></pre>
+<p>Find <code>&lt;container_name&gt;</code> with <code>docker ps</code>.</p>
+<p>Then restore <code>endTime</code> so the case can be resumed:</p>
+<pre><code class="language-bash">sed -i 's/stopAt.*writeNow;/stopAt          endTime;/' \
+  tutorials/laserbeamFoam/CASE/system/controlDict
+</code></pre>
+<hr />
+<h2>Resume</h2>
+<p>The Allrun script skips <code>decomposePar</code> if <code>processor0/</code> already exists, so just rerun the <strong>Run</strong> command above.</p>
+<hr />
+<h2>Reconstruct for ParaView</h2>
+<p><strong>Always run <code>reconstructParMesh</code> before <code>reconstructPar</code></strong> — it rebuilds the mesh topology
+for each timestep. Skipping it causes a FOAM FATAL ERROR on any timestep whose mesh changed.</p>
+<pre><code class="language-bash">docker run --rm -v $(pwd):/workspace lbf3 bash -lc \
+  &quot;cd /workspace/tutorials/laserbeamFoam/CASE &amp;&amp; \
+   reconstructParMesh -noFunctionObjects 2&gt;&amp;1 | tee log.reconstructParMesh &amp;&amp; \
+   reconstructPar    -noFunctionObjects 2&gt;&amp;1 | tee log.reconstructPar&quot;
+</code></pre>
+<p>Both commands skip already-reconstructed timesteps, so re-running after the simulation has
+advanced further is safe.</p>
+<hr />
+<h2>Post-processing in ParaView</h2>
+<p>A pre-configured ParaView state is at <code>tutorials/laserbeamFoam/laser.pvsm</code>.
+It stores the camera, filters, and colour maps — you just redirect it to your case files.</p>
+<h3>Step-by-step: loading the state for a new case</h3>
+<ol>
+<li>
+<p>Make sure the case has been reconstructed (see above) and a <code>.foam</code> marker file exists.
+   If it doesn't, create one:
+   <code>bash
+   touch tutorials/laserbeamFoam/CASE/CASE.foam</code></p>
+</li>
+<li>
+<p>Open ParaView → <strong>File → Load State</strong> → navigate to <code>tutorials/laserbeamFoam/laser.pvsm</code> → <strong>OK</strong>.</p>
+</li>
+<li>
+<p>In the dialog that appears, select <strong>"Choose File Names"</strong> (not "Use File Names From State" —
+   that points to the original machine's paths and will fail).</p>
+</li>
+<li>
+<p>ParaView lists each data source that needs a file. Point them to your case:</p>
+</li>
+<li><strong>OpenFOAM reader</strong> → browse to <code>tutorials/laserbeamFoam/CASE/CASE.foam</code></li>
+<li>
+<p><strong>VTK series</strong> → browse to <code>tutorials/laserbeamFoam/CASE/VTKs/rays_laser0.vtk.series</code></p>
+</li>
+<li>
+<p>Click <strong>OK</strong>. The melt pool, temperature field, and laser rays load automatically.</p>
+</li>
+</ol>
+<h3>VTK series files — fixing after pause/resume</h3>
+<p>laserbeamFoam writes a <code>VTKs/rays_laser0.vtk.series</code> JSON index alongside each VTK frame.
+When a run is <strong>killed or paused and resumed</strong>, OpenFOAM rewrites this file with only the frames
+from the new segment — earlier frames disappear from ParaView's timeline.</p>
+<p><strong>Fix:</strong> run the repair script from the repo root:</p>
+<pre><code class="language-bash">python3 tutorials/laserbeamFoam/fix_vtk_series.py tutorials/laserbeamFoam/CASE/VTKs
+</code></pre>
+<p>Alternatively, ask an AI assistant — point it at <code>fix_vtk_series.py</code> and the <code>VTKs/</code> directory
+and it will repair the file automatically.</p>
+<hr />
+<h2>Clean up processor directories</h2>
+<p><code>processor*/</code> directories are large (~25 GB per case). Delete them after a successful reconstruction.
+Files are root-owned (written by Docker), so always use Docker to remove them:</p>
+<pre><code class="language-bash">docker run --rm -v $(pwd):/workspace lbf3 bash -c \
+  &quot;rm -rf /workspace/tutorials/laserbeamFoam/CASE/processor*/&quot;
+</code></pre>
+<hr />
+<h2>Notes</h2>
+<ul>
+<li>Run all <code>docker run</code> commands from the repo root (<code>~/lbf3</code>) so <code>$(pwd)</code> resolves correctly.</li>
+<li>Use <code>cd</code> inside the container (not the <code>-w</code> flag) — the login shell (<code>bash -lc</code>) sources the
+  OpenFOAM profile which resets <code>$PWD</code> to <code>/root</code>.</li>
+<li>Processor dirs are root-owned because Docker runs as root; always use Docker (not <code>sudo rm</code>) to delete them.</li>
+<li>PLC reference cases (testruns 1–29) live under <code>tutorials/laserbeamFoam/plc/</code>.
+  VDEP cases (testruns 30+) live directly under <code>tutorials/laserbeamFoam/</code>.</li>
+</ul>
+</body>
+</html>
