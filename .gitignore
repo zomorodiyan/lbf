@@ -79,6 +79,12 @@ tutorials/laserbeamFoam/make_collage_*.py
 tutorials/laserbeamFoam/make_single_mpg.py
 tutorials/laserbeamFoam/make_laser_mpg.sh
 
+# 3D exports and stale animation frames in plc/ cases
+tutorials/laserbeamFoam/plc/**/*.abc
+tutorials/laserbeamFoam/plc/**/*.gltf
+tutorials/laserbeamFoam/plc/**/gif_old/
+tutorials/laserbeamFoam/plc/testrun*/*.pvsm
+
 # LaTeX build artefacts
 *.aux
 *.log
