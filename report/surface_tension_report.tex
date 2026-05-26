@@ -1,0 +1,165 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{parskip}
+\usepackage{hyperref}
+
+\begin{document}
+\thispagestyle{empty}
+
+\section{Surface Tension of 316L with PLC Contamination}
+
+\noindent 50\,\textmu m PLC (C$_6$H$_{10}$O$_2$; $f_C=63.2$\,wt\%,
+$f_O=28.1$\,wt\%, hydrogen lost as gas) coating dissolved into a
+500\,\textmu m melt pool at $T=1873$\,K \cite{morohoshi2013}.
+
+\subsection{Notation}
+
+\begin{itemize}
+  \item $f_C,\,f_O$ --- elemental mass fractions of carbon and oxygen
+        \emph{in the PLC polymer itself} (i.e.\ the chemical composition of
+        the coating before it contacts the melt).
+        For C$_6$H$_{10}$O$_2$ with hydrogen lost as gas:
+        $f_C = 72/114 = 63.2$\,wt\%, $f_O = 32/114 = 28.1$\,wt\%.
+  \item $w_C,\,w_O$ --- weight-percent concentrations of C and O
+        \emph{dissolved in the steel melt} after the PLC has mixed in.
+        These are the quantities that enter the surface tension model.
+  \item $w_C^{0},\,w_O^{0}$ --- baseline C and O in virgin 316L stainless
+        steel before any PLC contact ($w_C^0\approx0.030$\,wt\%,
+        $w_O^0\approx0.001$\,wt\%).
+  \item $x_\text{PLC}$ --- effective mass fraction of PLC dissolved into the
+        melt, accounting for dissolution efficiency $\eta$.
+  \item $\eta\in[0,1]$ --- dissolution efficiency: fraction of PLC that
+        actually mixes into the melt; the remainder pyrolyses to gas or is
+        lost as CO outgassing. A value $\eta=0.1$ is adopted.
+\end{itemize}
+
+\subsection{Dissolution Efficiency}
+
+\begin{equation}
+  w_{C,O} = x_\text{PLC}(\eta)\,f_{C,O} + \bigl(1-x_\text{PLC}\bigr)\,w_{C,O}^{0},
+  \qquad
+  x_\text{PLC} = \frac{\eta\,\rho_\text{PLC}\,h}{\eta\,\rho_\text{PLC}\,h + \rho_s D},
+\end{equation}
+with $\rho_\text{PLC}=1.145$\,g\,cm$^{-3}$, $\rho_s=8.0$\,g\,cm$^{-3}$,
+$h=50$\,\textmu m, $D=500$\,\textmu m.
+
+\subsection{Surface Tension Model}
+
+\begin{align}
+  \frac{\sigma}{\text{mN\,m}^{-1}}
+    &= \underbrace{1925 - 0.455\,(T-1808)}_{\text{pure Fe}} \notag\\
+    &\phantom{{}={}}- 0.155\,T\ln\!\Bigl[
+        1 + \underbrace{10^{-0.17\,w_O - 0.427\,w_C} w_O
+        \exp\!\bigl(\tfrac{29300}{T}-10.9\bigr)}_{\mathcal{K}}
+      \Bigr]
+  \label{eq:sigma}
+\end{align}
+
+\begin{equation}
+  \frac{\mathrm{d}\sigma}{\mathrm{d}T}
+    = -0.455 - 0.155\!\left[\ln(1+\mathcal{K})
+      - \frac{\mathcal{K}}{1+\mathcal{K}}\cdot\frac{29300}{T}\right]
+  \label{eq:dsdt}
+\end{equation}
+
+\subsection{Explicit Calculation at $T=1873$\,K}
+
+The adsorption parameter $\mathcal{K}$ and resulting surface tension are computed
+below for the two simulated cases.
+
+\paragraph{Pure 316L ($\eta=0$, $w_C=0.030$\,wt\%, $w_O=0.001$\,wt\%):}
+\begin{align*}
+  \mathcal{K} &= 10^{-0.17(0.001)-0.427(0.030)}\times 0.001
+                 \times e^{29300/1873-10.9} = 0.1114 \\
+  \sigma       &= 1925 - 0.455(1873-1808)
+                 - 0.155(1873)\ln(1.1114) = 1864.8\;\text{mN\,m}^{-1} \\
+  \tfrac{\mathrm{d}\sigma}{\mathrm{d}T}
+               &= -0.455 - 0.155\!\left[\ln(1.1114)
+                 -\tfrac{0.1114}{1.1114}\cdot\tfrac{29300}{1873}\right]
+                 = -0.228\;\text{mN\,m}^{-1}\text{K}^{-1}
+\end{align*}
+
+\paragraph{316L + PLC ($\eta=0.1$, $w_C=0.120$\,wt\%, $w_O=0.0411$\,wt\%):}
+\begin{align*}
+  \mathcal{K} &= 10^{-0.17(0.0411)-0.427(0.120)}\times 0.0411
+                 \times e^{29300/1873-10.9} = 4.127 \\
+  \sigma       &= 1925 - 0.455(1873-1808)
+                 - 0.155(1873)\ln(5.127) = 1420.9\;\text{mN\,m}^{-1} \\
+  \tfrac{\mathrm{d}\sigma}{\mathrm{d}T}
+               &= -0.455 - 0.155\!\left[\ln(5.127)
+                 -\tfrac{4.127}{5.127}\cdot\tfrac{29300}{1873}\right]
+                 = +1.244\;\text{mN\,m}^{-1}\text{K}^{-1}
+\end{align*}
+
+\subsection{Sensitivity to Dissolution Efficiency}
+\label{sec:sens}
+
+\begin{table}[h]
+\centering
+\caption{Surface tension at $T=1873$\,K (500\,\textmu m melt pool). Bold: adopted case.}
+\begin{tabular}{cccccl}
+\toprule
+$\eta$ & $w_C$ (wt\%) & $w_O$ (wt\%) &
+  $\sigma$ (mN\,m$^{-1}$) &
+  $\mathrm{d}\sigma/\mathrm{d}T$ (mN\,m$^{-1}$K$^{-1}$) &
+  Marangoni \\
+\midrule
+\textbf{0 (pure 316L)}   & $\mathbf{0.030}$ & $\mathbf{0.0010}$ & $\mathbf{1864.8}$ & $\mathbf{-0.228}$ & \textbf{outward} \\
+$0.001$         & $0.031$ & $0.0014$ & $1853.3$ & $-0.150$ & outward \\
+$0.01$          & $0.039$ & $0.0050$ & $1767.5$ & $+0.341$ & inward \\
+$0.02$          & $0.048$ & $0.0090$ & $1696.3$ & $+0.642$ & inward \\
+$0.05$          & $0.075$ & $0.0211$ & $1555.1$ & $+1.037$ & inward \\
+$\mathbf{0.1}$  & $\mathbf{0.120}$ & $\mathbf{0.0411}$ & $\mathbf{1420.9}$ & $\mathbf{+1.244}$ & \textbf{inward} \\
+$1.0$           & $0.921$ & $0.397$  & $1076.6$ & $+1.388$ & inward \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Simulation Cases}
+
+Two cases are run with laserbeamFoam on 32 MPI processes (hierarchical
+decomposition $2\times2\times8$ along $x\times y\times z$), differing only in
+surface tension properties.
+
+\begin{table}[h]
+\centering
+\caption{Simulation parameters. Surface tension properties differ between the two cases
+(bold rows); all other parameters are identical.}
+\begin{tabular}{lcc}
+\toprule
+Parameter & Pure 316L & 316L + PLC ($\eta=0.1$) \\
+\midrule
+Domain ($x \times y \times z$)  & \multicolumn{2}{c}{$0.32 \times 0.50 \times 0.50$\,mm} \\
+Base mesh                        & \multicolumn{2}{c}{$32\times50\times50$ cells (10\,\textmu m)} \\
+AMR max refinement               & \multicolumn{2}{c}{1 level $\rightarrow$ 5\,\textmu m minimum} \\
+Max cells                        & \multicolumn{2}{c}{200\,000} \\
+Laser power                      & \multicolumn{2}{c}{200\,W} \\
+Laser radius                     & \multicolumn{2}{c}{35\,\textmu m} \\
+Laser scan speed                 & \multicolumn{2}{c}{200\,mm\,s$^{-1}$} \\
+Laser path ($z$)                 & \multicolumn{2}{c}{0.10\,mm $\rightarrow$ 0.40\,mm (0.30\,mm track)} \\
+Simulation time                  & \multicolumn{2}{c}{1.5\,ms} \\
+Initial $\Delta t$               & \multicolumn{2}{c}{$10^{-8}$\,s} \\
+Max $\Delta t$                   & \multicolumn{2}{c}{$2\times10^{-6}$\,s (Co\,$\leq$\,0.1)} \\
+Output interval                  & \multicolumn{2}{c}{$10^{-5}$\,s (150 snapshots)} \\
+MPI processes                    & \multicolumn{2}{c}{32 (hierarchical $2\times2\times8$, order $y$--$x$--$z$)} \\
+\midrule
+\textbf{$\sigma$ (N\,m$^{-1}$)}
+  & $\mathbf{1.8648}$ & $\mathbf{1.4209}$ \\
+\textbf{$\mathrm{d}\sigma/\mathrm{d}T$ (N\,m$^{-1}$K$^{-1}$)}
+  & $\mathbf{-2.28\times10^{-4}}$ & $\mathbf{+1.244\times10^{-3}}$ \\
+\textbf{Marangoni flow}
+  & \textbf{outward} & \textbf{inward} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{thebibliography}{9}
+\bibitem{morohoshi2013}
+K.~Morohoshi et al.,
+``Effects of Carbon and Oxygen on Fe--C--O Melt Surface Tension,''
+\textit{ISIJ Int.}, vol.\,53, no.\,8, pp.\,1315--1319, 2013.
+\end{thebibliography}
+
+\end{document}

@@ -100,7 +100,6 @@ tutorials/laserbeamFoam/vdep/testrun*/*.pvsm
 
 # Untracked working directories
 results/
-report/
 
 # editor and misc backup files - anywhere
 *~
