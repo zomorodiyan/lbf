@@ -1,0 +1,22 @@
+#!/bin/sh
+
+# Source tutorial run functions
+. $WM_PROJECT_DIR/bin/tools/RunFunctions
+
+# Allow mpirun as root (Docker)
+export OMPI_ALLOW_RUN_AS_ROOT=1
+export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+
+NPROCS=$(foamDictionary -entry numberOfSubdomains -value system/decomposeParDict)
+
+# Restart from 0.001 — mesh and fields already present; skip blockMesh/setFields.
+# Decompose only if processor directories don't exist yet (fresh start or after Allclean).
+if [ ! -d "processor0" ]; then
+    runApplication decomposePar
+fi
+
+if [ "$NPROCS" -gt 1 ]; then
+    mpirun -np "$NPROCS" laserbeamFoam -parallel >> log.laserbeamFoam 2>&1
+else
+    laserbeamFoam >> log.laserbeamFoam 2>&1
+fi
