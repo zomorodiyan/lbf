@@ -78,10 +78,6 @@ tutorials/laserbeamFoam/image.png
 tutorials/laserbeamFoam/tr19_*
 tutorials/laserbeamFoam/paraview/
 
-# Video/collage generation scripts (personal workflow, not needed for runs)
-tutorials/laserbeamFoam/make_collage_*.py
-tutorials/laserbeamFoam/make_single_mpg.py
-tutorials/laserbeamFoam/make_laser_mpg.sh
 
 # 3D exports and stale animation frames in plc/ and vdep/ cases
 tutorials/laserbeamFoam/plc/**/*.abc
