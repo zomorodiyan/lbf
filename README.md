@@ -3,7 +3,7 @@
 ![alt text](https://github.com/micmog/LaserbeamFoam/blob/OF2506-newsolver/images/t200usT.png?raw=true)
 
 > **This is a research fork** of [micmog/LaserbeamFoam](https://github.com/micmog/LaserbeamFoam)
-> maintained by the Zomorodiyan research group. See the [Extensions in this fork](#extensions-in-this-fork)
+> maintained by the Zomorodiyan. See the [Extensions in this fork](#extensions-in-this-fork)
 > section for changes relative to the upstream repo.
 > For running cases see **[TESTRUNS.md](TESTRUNS.md)** or open **[TESTRUNS.html](TESTRUNS.html)** in a browser.
 
