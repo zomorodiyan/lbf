@@ -19,7 +19,7 @@ fi
 # Extract latest values from log
 LATEST_TIME=$(grep "^Time = " "$LOG_FILE" | tail -1 | awk '{print $3}')
 LATEST_EXEC=$(grep "^ExecutionTime = " "$LOG_FILE" | tail -1 | awk '{print $3}')
-LATEST_CLOCK=$(grep "^ClockTime = " "$LOG_FILE" | tail -1 | awk '{print $3}')
+LATEST_CLOCK=$(grep "^ExecutionTime = " "$LOG_FILE" | tail -1 | awk '{print $7}')
 
 if [ -z "$LATEST_TIME" ] || [ -z "$LATEST_EXEC" ]; then
     echo "Error: Could not extract data from log file"

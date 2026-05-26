@@ -6,8 +6,8 @@
 
 | Case | Change vs. tr26 | Recompile |
 |---|---|---|
-| testrun27 | σ = 2.072 N/m (raised from 1.8648) — CSF magnitude sensitivity | no |
-| testrun28 | dσ/dT = +3.41×10⁻⁴ (sign flipped) — Marangoni inward instead of outward | no |
+| testrun27 | Full Morohoshi σ(T) for pure 316L (η=0); CSF sigma +25% → 2.3310 N/m | yes |
+| testrun28 | Full Morohoshi σ(T) for 316L+PLC η=0.01 (carbon/oxygen); T*=1963 K, competing vortices | yes |
 | testrun29 | `elec_resistivity` = 7.04×10⁻⁸ → A₀ = 5% (halved from 10%) | no |
 | testrun30 | Full Morohoshi σ(T) poly for η=0.01; dσ/dT changes sign at T*=1963 K | **yes** |
 
