@@ -142,14 +142,32 @@ advanced further is safe.
 ## Post-processing in ParaView
 
 A pre-configured ParaView state is at `tutorials/laserbeamFoam/laser.pvsm`.
-Open ParaView → **File → Load State** → select `laser.pvsm` → point it at your case directory.
-This loads a ready-to-use view of the laser, melt pool, and temperature field.
+It stores the camera, filters, and colour maps — you just redirect it to your case files.
 
-### VTK series files
+### Step-by-step: loading the state for a new case
+
+1. Make sure the case has been reconstructed (see above) and a `.foam` marker file exists.
+   If it doesn't, create one:
+   ```bash
+   touch tutorials/laserbeamFoam/CASE/CASE.foam
+   ```
+
+2. Open ParaView → **File → Load State** → navigate to `tutorials/laserbeamFoam/laser.pvsm` → **OK**.
+
+3. In the dialog that appears, select **"Choose File Names"** (not "Use File Names From State" —
+   that points to the original machine's paths and will fail).
+
+4. ParaView lists each data source that needs a file. Point them to your case:
+   - **OpenFOAM reader** → browse to `tutorials/laserbeamFoam/CASE/CASE.foam`
+   - **VTK series** → browse to `tutorials/laserbeamFoam/CASE/VTKs/rays_laser0.vtk.series`
+
+5. Click **OK**. The melt pool, temperature field, and laser rays load automatically.
+
+### VTK series files — fixing after pause/resume
 
 laserbeamFoam writes a `VTKs/rays_laser0.vtk.series` JSON index alongside each VTK frame.
-When a run is **paused and resumed**, OpenFOAM rewrites this file with only the frames from the
-new segment — earlier frames disappear from ParaView's timeline.
+When a run is **killed or paused and resumed**, OpenFOAM rewrites this file with only the frames
+from the new segment — earlier frames disappear from ParaView's timeline.
 
 **Fix:** run the repair script from the repo root:
 
@@ -157,9 +175,8 @@ new segment — earlier frames disappear from ParaView's timeline.
 python3 tutorials/laserbeamFoam/fix_vtk_series.py tutorials/laserbeamFoam/CASE/VTKs
 ```
 
-The script scans all `*.vtk` files, extracts timestamps from filenames, and rewrites a complete
-series file. You can also point an AI assistant at the script and the VTKs directory and ask it
-to fix the series file — it handles it automatically.
+Alternatively, ask an AI assistant — point it at `fix_vtk_series.py` and the `VTKs/` directory
+and it will repair the file automatically.
 
 ---
 
