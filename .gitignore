@@ -1,3 +1,7 @@
+# Personal / tooling directories
+.claude/
+.github/prompts/
+
 # Test directories
 tutorialsTest
 
@@ -51,6 +55,29 @@ tutorials/laserbeamFoam/plc/testrun*/**/*.png
 tutorials/laserbeamFoam/plc/testrun*/**/*.gif
 tutorials/laserbeamFoam/plc/testrun*/*.png
 tutorials/laserbeamFoam/plc/testrun*/*.gif
+
+# ParaView states (only laser.pvsm is committed)
+tutorials/laserbeamFoam/flow_state.pvsm
+tutorials/laserbeamFoam/full_state.pvsm
+tutorials/laserbeamFoam/marangoni.pvsm
+tutorials/laserbeamFoam/wave_may5.pvsm
+
+# Generated visualizations and animations at tutorials root
+tutorials/laserbeamFoam/*.gif
+tutorials/laserbeamFoam/*.mp4
+tutorials/laserbeamFoam/collage_*.png
+tutorials/laserbeamFoam/sigma_*.png
+tutorials/laserbeamFoam/testrun*_preview.png
+tutorials/laserbeamFoam/testrun*.mp4
+tutorials/laserbeamFoam/full1.png
+tutorials/laserbeamFoam/image.png
+tutorials/laserbeamFoam/tr19_*
+tutorials/laserbeamFoam/paraview/
+
+# Video/collage generation scripts (personal workflow, not needed for runs)
+tutorials/laserbeamFoam/make_collage_*.py
+tutorials/laserbeamFoam/make_single_mpg.py
+tutorials/laserbeamFoam/make_laser_mpg.sh
 
 # LaTeX build artefacts
 *.aux

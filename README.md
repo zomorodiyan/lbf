@@ -1,6 +1,53 @@
-# `laserbeamFoam` solvers
+# `laserbeamFoam` solvers — Research Fork
 
 ![alt text](https://github.com/micmog/LaserbeamFoam/blob/OF2506-newsolver/images/t200usT.png?raw=true)
+
+> **This is a research fork** of [micmog/LaserbeamFoam](https://github.com/micmog/LaserbeamFoam)
+> maintained by the Zomorodiyan research group. See the [Extensions in this fork](#extensions-in-this-fork)
+> section for changes relative to the upstream repo.
+> For running cases see **[TESTRUNS.md](TESTRUNS.md)** or open **[TESTRUNS.html](TESTRUNS.html)** in a browser.
+
+---
+
+## Extensions in this fork
+
+### Docker-based workflow
+The solver is built and run entirely inside a Docker container — no manual OpenFOAM installation
+required. The `Dockerfile` at the repo root builds the image from scratch (OpenFOAM v2506 +
+LIGGGHTS + the custom solver). See [TESTRUNS.md](TESTRUNS.md) for the full workflow.
+
+### Numerical stability fix — `TEqn.H`
+The vaporization flux term `Qv` in `applications/solvers/laserbeamFoam/TEqn.H` now clamps `T`
+to a minimum of 300 K before the exponential evaluation. This prevents `exp()` overflow in cold
+gas cells during early timesteps.
+
+### Temperature-dependent Marangoni — `poly_sigma`
+`transportProperties` supports a polynomial surface tension `poly_sigma` (coefficients vs. T),
+enabling the full Morohoshi σ(T) model with sign-changing dσ/dT for sulphur/oxygen-bearing steels.
+
+### VDEP absorptivity model — AlSi10Mg
+Tutorial cases `testrun30`–`testrun32` implement the velocity-dependent energy profile (VDEP)
+absorptivity model for AlSi10Mg bare-plate laser melting (1064 nm, keyhole regime).
+Material parameters: ρ=2670 kg/m³, Tliq=880 K, Tvap=2900 K, λ=1.064 µm.
+
+### Research tutorial cases
+All research cases live under `tutorials/laserbeamFoam/`:
+
+| Directory | Material | Study |
+|---|---|---|
+| `plc/testrun1–29` | 316L stainless steel | PLC (power-law creep) baseline; surface tension parametric study |
+| `testrun30_vdep_1_Al` | AlSi10Mg | VDEP absorptivity, Tvap=2743 K |
+| `testrun31_vdep_2_Al` | AlSi10Mg | VDEP, Tvap=2900 K calibrated |
+| `testrun32_vdep_3_Al` | AlSi10Mg | VDEP, 500 W (handover baseline) |
+
+See [SURFACE_TENSION_STUDY.md](SURFACE_TENSION_STUDY.md) for the 316L surface tension study notes.
+
+### Post-processing utilities
+- `tutorials/laserbeamFoam/laser.pvsm` — ParaView state for melt pool + laser ray visualization
+- `tutorials/laserbeamFoam/fix_vtk_series.py` — repairs `.vtk.series` files after paused/resumed runs
+- `reconstruct_results.sh` — Docker-based reconstruction with multi-case and `--latest` support
+
+---
 
 ## Overview
 
@@ -52,17 +99,26 @@ Target applications for the solvers included in this repository include:
 
 ## Installation
 
-The `OpenFoam_com_main` branch compiles with openfoam v2506, while the `Openfoam_org_main` branch compiles
- with OpenFOAM10. To install the `laserbeamFoam` solvers, first, install and
- load a compatible version of OpenFOAM, then clone and build the `laserbeamFoam`
- library:
+### This fork — Docker (recommended)
+
+No OpenFOAM installation needed. Build the solver image once:
 
 ```bash
-https://github.com/laserbeamfoam/LaserbeamFoam.git
-cd LaserbeamFoam && ./Allwmake -j
+cd ~/lbf3
+docker build --build-arg CACHE_BUST=$(date +%s) -t lbf3 .
 ```
 
-where the `-j` option uses all CPU cores available for building.
+See [TESTRUNS.md](TESTRUNS.md) for the full run/reconstruct/post-process workflow.
+
+### Upstream — bare-metal OpenFOAM
+
+The `OpenFoam_com_main` branch compiles with OpenFOAM v2506; `Openfoam_org_main` with OpenFOAM 10.
+Install and source a compatible OpenFOAM, then:
+
+```bash
+git clone https://github.com/laserbeamfoam/LaserbeamFoam.git
+cd LaserbeamFoam && ./Allwmake -j
+```
 
 The installation can be tested using the tutorial cases described below.
 
