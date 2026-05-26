@@ -55,6 +55,10 @@ tutorials/laserbeamFoam/plc/testrun*/**/*.png
 tutorials/laserbeamFoam/plc/testrun*/**/*.gif
 tutorials/laserbeamFoam/plc/testrun*/*.png
 tutorials/laserbeamFoam/plc/testrun*/*.gif
+tutorials/laserbeamFoam/vdep/testrun*/**/*.png
+tutorials/laserbeamFoam/vdep/testrun*/**/*.gif
+tutorials/laserbeamFoam/vdep/testrun*/*.png
+tutorials/laserbeamFoam/vdep/testrun*/*.gif
 
 # ParaView states (only laser.pvsm is committed)
 tutorials/laserbeamFoam/flow_state.pvsm
@@ -79,11 +83,15 @@ tutorials/laserbeamFoam/make_collage_*.py
 tutorials/laserbeamFoam/make_single_mpg.py
 tutorials/laserbeamFoam/make_laser_mpg.sh
 
-# 3D exports and stale animation frames in plc/ cases
+# 3D exports and stale animation frames in plc/ and vdep/ cases
 tutorials/laserbeamFoam/plc/**/*.abc
 tutorials/laserbeamFoam/plc/**/*.gltf
 tutorials/laserbeamFoam/plc/**/gif_old/
 tutorials/laserbeamFoam/plc/testrun*/*.pvsm
+tutorials/laserbeamFoam/vdep/**/*.abc
+tutorials/laserbeamFoam/vdep/**/*.gltf
+tutorials/laserbeamFoam/vdep/**/gif_old/
+tutorials/laserbeamFoam/vdep/testrun*/*.pvsm
 
 # LaTeX build artefacts
 *.aux

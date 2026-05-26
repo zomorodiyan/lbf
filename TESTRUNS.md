@@ -4,7 +4,7 @@ All operations run inside the `lbf3` Docker container, which mounts the repo at 
 All commands below assume you are running from the **repo root** (`cd ~/lbf3` first).
 
 **Case paths:**
-- VDEP cases (active): `tutorials/laserbeamFoam/CASE` — e.g. `testrun32_vdep_3_Al`
+- VDEP cases: `tutorials/laserbeamFoam/vdep/CASE` — e.g. `testrun32_vdep_3_Al`
 - PLC reference cases: `tutorials/laserbeamFoam/plc/CASE`
 
 Replace `CASE` with the actual case directory name throughout this document.
@@ -79,7 +79,7 @@ This takes ~10–20 minutes the first time, ~2–5 minutes for subsequent rebuil
 
 ## Recommended starting case
 
-**`testrun32_vdep_3_Al`** — AlSi10Mg, 500 W, 1.5 m/s, 35 µm beam radius, 32 cores.
+**`vdep/testrun32_vdep_3_Al`** — AlSi10Mg, 500 W, 1.5 m/s, 35 µm beam radius, 32 cores.
 This is the baseline VDEP case to start from.
 
 ---
@@ -214,4 +214,4 @@ docker run --rm -v $(pwd):/workspace lbf3 bash -c \
   OpenFOAM profile which resets `$PWD` to `/root`.
 - Processor dirs are root-owned because Docker runs as root; always use Docker (not `sudo rm`) to delete them.
 - PLC reference cases (testruns 1–29) live under `tutorials/laserbeamFoam/plc/`.
-  VDEP cases (testruns 30+) live directly under `tutorials/laserbeamFoam/`.
+- VDEP cases (testruns 30+) live under `tutorials/laserbeamFoam/vdep/`.

@@ -66,7 +66,7 @@
 <p>All operations run inside the <code>lbf3</code> Docker container, which mounts the repo at <code>/workspace</code>.
 All commands below assume you are running from the <strong>repo root</strong> (<code>cd ~/lbf3</code> first).</p>
 <p><strong>Case paths:</strong>
-- VDEP cases (active): <code>tutorials/laserbeamFoam/CASE</code> — e.g. <code>testrun32_vdep_3_Al</code>
+- VDEP cases: <code>tutorials/laserbeamFoam/vdep/CASE</code> — e.g. <code>testrun32_vdep_3_Al</code>
 - PLC reference cases: <code>tutorials/laserbeamFoam/plc/CASE</code></p>
 <p>Replace <code>CASE</code> with the actual case directory name throughout this document.</p>
 <hr />
@@ -114,7 +114,7 @@ docker build --build-arg CACHE_BUST=$(date +%s) -t lbf3 .
 <p>This takes ~10–20 minutes the first time, ~2–5 minutes for subsequent rebuilds.</p>
 <hr />
 <h2>Recommended starting case</h2>
-<p><strong><code>testrun32_vdep_3_Al</code></strong> — AlSi10Mg, 500 W, 1.5 m/s, 35 µm beam radius, 32 cores.
+<p><strong><code>vdep/testrun32_vdep_3_Al</code></strong> — AlSi10Mg, 500 W, 1.5 m/s, 35 µm beam radius, 32 cores.
 This is the baseline VDEP case to start from.</p>
 <hr />
 <h2>Run</h2>
@@ -210,8 +210,8 @@ Files are root-owned (written by Docker), so always use Docker to remove them:</
 <li>Use <code>cd</code> inside the container (not the <code>-w</code> flag) — the login shell (<code>bash -lc</code>) sources the
   OpenFOAM profile which resets <code>$PWD</code> to <code>/root</code>.</li>
 <li>Processor dirs are root-owned because Docker runs as root; always use Docker (not <code>sudo rm</code>) to delete them.</li>
-<li>PLC reference cases (testruns 1–29) live under <code>tutorials/laserbeamFoam/plc/</code>.
-  VDEP cases (testruns 30+) live directly under <code>tutorials/laserbeamFoam/</code>.</li>
+<li>PLC reference cases (testruns 1–29) live under <code>tutorials/laserbeamFoam/plc/</code>.</li>
+<li>VDEP cases (testruns 30+) live under <code>tutorials/laserbeamFoam/vdep/</code>.</li>
 </ul>
 </body>
 </html>

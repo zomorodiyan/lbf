@@ -36,9 +36,9 @@ All research cases live under `tutorials/laserbeamFoam/`:
 | Directory | Material | Study |
 |---|---|---|
 | `plc/testrun1–29` | 316L stainless steel | PLC (power-law creep) baseline; surface tension parametric study |
-| `testrun30_vdep_1_Al` | AlSi10Mg | VDEP absorptivity, Tvap=2743 K |
-| `testrun31_vdep_2_Al` | AlSi10Mg | VDEP, Tvap=2900 K calibrated |
-| `testrun32_vdep_3_Al` | AlSi10Mg | VDEP, 500 W (handover baseline) |
+| `vdep/testrun30_vdep_1_Al` | AlSi10Mg | VDEP absorptivity, Tvap=2743 K |
+| `vdep/testrun31_vdep_2_Al` | AlSi10Mg | VDEP, Tvap=2900 K calibrated |
+| `vdep/testrun32_vdep_3_Al` | AlSi10Mg | VDEP, 500 W (handover baseline) |
 
 See [SURFACE_TENSION_STUDY.md](SURFACE_TENSION_STUDY.md) for the 316L surface tension study notes.
 
