@@ -94,13 +94,24 @@ docker run --rm hello-world   # verify
 cd ~/lbf3
 </code></pre>
 <hr />
+<h2>How the Docker setup works</h2>
+<p>Rather than installing OpenFOAM and the custom solver directly on your machine, everything runs
+inside a <strong>Docker container</strong> built from the <code>Dockerfile</code> at the repo root.</p>
+<p>The image contains:
+- OpenFOAM v2506 (the CFD framework)
+- LIGGGHTS (discrete element method solver, used by powder-bed cases)
+- The compiled <code>laserbeamFoam</code> solver binary (built from <code>applications/</code> in this repo)</p>
+<p>When you run a simulation, Docker mounts the repo directory into the container at <code>/workspace</code>
+so the case files on your machine are directly accessible — results are written back to your
+disk and survive after the container exits.</p>
 <h2>Build the Docker image</h2>
-<p>The solver binary lives inside the image; only needed once (and after any source changes).
-<code>CACHE_BUST</code> forces Docker to re-compile while reusing the cached OS and LIGGGHTS layers.</p>
+<p>Build once after cloning (and again after any source code change in <code>applications/</code>).
+<code>CACHE_BUST</code> forces Docker to re-run the compile step while reusing the cached OS and LIGGGHTS
+layers, making rebuilds much faster than a full <code>--no-cache</code> build.</p>
 <pre><code class="language-bash">cd ~/lbf3
 docker build --build-arg CACHE_BUST=$(date +%s) -t lbf3 .
 </code></pre>
-<p>This takes ~10–20 minutes the first time.</p>
+<p>This takes ~10–20 minutes the first time, ~2–5 minutes for subsequent rebuilds.</p>
 <hr />
 <h2>Recommended starting case</h2>
 <p><strong><code>testrun32_vdep_3_Al</code></strong> — AlSi10Mg, 500 W, 1.5 m/s, 35 µm beam radius, 32 cores.

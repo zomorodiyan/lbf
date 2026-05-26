@@ -48,17 +48,32 @@ cd ~/lbf3
 
 ---
 
+## How the Docker setup works
+
+Rather than installing OpenFOAM and the custom solver directly on your machine, everything runs
+inside a **Docker container** built from the `Dockerfile` at the repo root.
+
+The image contains:
+- OpenFOAM v2506 (the CFD framework)
+- LIGGGHTS (discrete element method solver, used by powder-bed cases)
+- The compiled `laserbeamFoam` solver binary (built from `applications/` in this repo)
+
+When you run a simulation, Docker mounts the repo directory into the container at `/workspace`
+so the case files on your machine are directly accessible — results are written back to your
+disk and survive after the container exits.
+
 ## Build the Docker image
 
-The solver binary lives inside the image; only needed once (and after any source changes).
-`CACHE_BUST` forces Docker to re-compile while reusing the cached OS and LIGGGHTS layers.
+Build once after cloning (and again after any source code change in `applications/`).
+`CACHE_BUST` forces Docker to re-run the compile step while reusing the cached OS and LIGGGHTS
+layers, making rebuilds much faster than a full `--no-cache` build.
 
 ```bash
 cd ~/lbf3
 docker build --build-arg CACHE_BUST=$(date +%s) -t lbf3 .
 ```
 
-This takes ~10–20 minutes the first time.
+This takes ~10–20 minutes the first time, ~2–5 minutes for subsequent rebuilds.
 
 ---
 
