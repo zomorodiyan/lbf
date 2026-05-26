@@ -1,19 +1,19 @@
 /*--------------------------------*- C++ -*----------------------------------*\
 | =========                 |                                                 |
 | \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
-|  \\    /   O peration     | Version:  3.0.1                                 |
-|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|  \\    /   O peration     | Version:  2506                                  |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 FoamFile
 {
-    version     2.0;
-    format      ascii;
-    class       dictionary;
-    location    "system";
-    object      controlDict;
+    version         2;
+    format          ascii;
+    class           dictionary;
+    location        "system";
+    object          controlDict;
 }
-// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 application     Flint_multiphaseEulerFoamD;
 
@@ -25,7 +25,7 @@ stopAt          endTime;
 
 endTime         0.0015;
 
-deltaT          1.0e-8;
+deltaT          1e-08;
 
 writeControl    adjustableRunTime;
 
@@ -47,18 +47,20 @@ runTimeModifiable yes;
 
 adjustTimeStep  yes;
 
-maxCo           0.1;//0.1;
+maxCo           0.1;
+
 maxAlphaCo      0.1;
 
-maxDeltaT       2e-6;
+maxDeltaT       2e-06;
 
 functions
 {
     parProfiling
     {
         type            parProfiling;
-        libs            (utilityFunctionObjects);
+        libs            ( utilityFunctionObjects );
     }
 }
+
 
 // ************************************************************************* //
