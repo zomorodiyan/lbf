@@ -1,0 +1,108 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      thermophysicalProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+//
+// 5-phase system: SS316L + SS316L_vapour + Ti64 + Ti64_vapour + air
+// Naming: metal1 = SS316L liquid, metal1vapour = SS316L vapour
+//         metal2 = Ti64   liquid, metal2vapour = Ti64   vapour
+//
+
+phases (SS316L SS316L_vapour Ti64 Ti64_vapour air);
+
+pMin            1000;
+
+P0              1e5;
+
+interface_thickness 1e-5;
+
+// Surface tension [N/m]
+// metal-metal: 0 (immiscible metals still have finite sigma, but treat as 0
+//   to allow mixing at the interface; set to small nonzero if you want a sharp boundary)
+// metal-vapour: ~1 N/m  metal-air: ~1 N/m  vapour-air: 0
+sigmas
+(
+    (SS316L_vapour  SS316L)         1.0
+    (Ti64_vapour    Ti64)           1.0
+    (air            SS316L)         1.0
+    (air            Ti64)           1.0
+    (SS316L         Ti64)           0.0
+    (SS316L_vapour  Ti64)           1.0
+    (Ti64_vapour    SS316L)         1.0
+    (SS316L_vapour  Ti64_vapour)    0.0
+    (SS316L_vapour  air)            0.0
+    (Ti64_vapour    air)            0.0
+);
+
+// Marangoni coefficient dσ/dT [N/(m·K)]
+dsigmadT
+(
+    (SS316L_vapour  SS316L)         -3.6e-4
+    (Ti64_vapour    Ti64)           -2.6e-4
+    (air            SS316L)         -3.6e-4
+    (air            Ti64)           -2.6e-4
+    (SS316L         Ti64)           0.0
+    (SS316L_vapour  Ti64)           -3.0e-4
+    (Ti64_vapour    SS316L)         -3.0e-4
+    (SS316L_vapour  Ti64_vapour)    0.0
+    (SS316L_vapour  air)            0.0
+    (Ti64_vapour    air)            0.0
+);
+
+// Vaporisation temperature [K]
+boils
+(
+    (SS316L_vapour  SS316L)         3090.0
+    (Ti64_vapour    Ti64)           3560.0
+);
+
+// Latent heat of vaporisation [J/kg]
+LatentHeatGas
+(
+    (SS316L_vapour  SS316L)         6.1e6
+    (Ti64_vapour    Ti64)           9.8e6
+);
+
+// Interface compression (1 = sharp, 0 = none)
+interfaceCompression
+(
+    (SS316L_vapour  SS316L)         1.0
+    (Ti64_vapour    Ti64)           1.0
+    (air            SS316L)         1.0
+    (air            Ti64)           1.0
+    (SS316L         Ti64)           0.0
+    (SS316L_vapour  Ti64)           1.0
+    (Ti64_vapour    SS316L)         1.0
+    (SS316L_vapour  Ti64_vapour)    0.0
+    (SS316L_vapour  air)            0.0
+    (Ti64_vapour    air)            0.0
+);
+
+// Fickian inter-metal diffusion [m^2/s]  (0 = immiscible pairs keep sharp interface)
+interfaceDiffusion
+(
+    (SS316L_vapour  SS316L)         0.0
+    (Ti64_vapour    Ti64)           0.0
+    (air            SS316L)         0.0
+    (air            Ti64)           0.0
+    (SS316L         Ti64)           0.0
+    (SS316L_vapour  Ti64)           0.0
+    (Ti64_vapour    SS316L)         0.0
+    (SS316L_vapour  Ti64_vapour)    0.0
+    (SS316L_vapour  air)            0.0
+    (Ti64_vapour    air)            0.0
+);
+
+// ************************************************************************* //

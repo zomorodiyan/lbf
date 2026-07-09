@@ -1,0 +1,139 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  =========                 |
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+   \\    /   O peration     | Website:  https://openfoam.org
+    \\  /    A nd           | Version:  10
+     \\/     M anipulation  |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      fvSolution;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+solvers
+{
+    "alpha.*"
+    {
+        nAlphaSubCycles 2;  // reduced from 4 — halves alpha solve cost per timestep (temporary, may increase VOF smearing)
+    }
+
+    "pcorr.*"
+    {
+    
+        solver          PCG;
+        preconditioner  DIC;
+        tolerance       1e-9;
+        relTol          0;
+        
+    /*
+        solver          PCG;
+        preconditioner
+        {
+            preconditioner  GAMG;
+            tolerance       1e-09;
+            relTol          0;
+            smoother        GaussSeidel;
+        }
+        tolerance       1e-09;
+        relTol          0;
+        maxIter         100;
+        */
+    }
+
+    p_rgh
+    {
+            solver          PCG;
+        preconditioner  DIC;
+        tolerance       1e-9;
+        relTol          0;
+    /*
+        solver          GAMG;
+        tolerance       1e-09;
+        relTol          0.0;
+        smoother        GaussSeidel;
+        */
+    }
+
+    p_rghFinal
+    {
+            $p_rgh;
+        relTol          0;
+        /*
+        solver          PCG;
+        preconditioner
+        {
+            preconditioner  GAMG;
+            tolerance       1e-09;
+            relTol          0;
+            nVcycles        2;
+            smoother        GaussSeidel;
+        }
+        tolerance       1e-09;
+        relTol          0;
+        maxIter         20;
+        */
+    }
+
+    U
+    {
+        solver          smoothSolver;
+        smoother        GaussSeidel;
+        tolerance       1e-09;
+        relTol          0.0;
+        nSweeps         1;
+    }
+
+    UFinal
+    {
+        $U;
+        tolerance       1e-09;
+        relTol          0;
+    }
+    T
+    {
+/*
+        solver          PBiCG;
+        preconditioner  DILU;
+        tolerance       1e-12;
+        minIter         1;
+        maxIter         500;//2
+*/
+        solver          smoothSolver;
+        smoother        symGaussSeidel;
+        tolerance       1e-9;
+        relTol          0.0;
+    }
+
+    TFinal
+    {
+        $T;
+    }
+}
+
+MELTING
+{
+    minTempCorrector 1;
+    maxTempCorrector 50;
+    epsilonTolerance 1e-4;
+    epsilonRelaxation 0.7;
+}
+
+PIMPLE
+{
+    nCorrectors     5;    // increased from 3 — more p-U coupling iterations, prevents blowup at large melt pools
+    nNonOrthogonalCorrectors 0;
+}
+
+relaxationFactors
+{
+    equations
+    {
+   //     ".*"            1;
+    }
+}
+
+// ************************************************************************* //

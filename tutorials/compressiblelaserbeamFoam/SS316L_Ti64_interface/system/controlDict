@@ -1,0 +1,50 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+application     multicomponentLaserbeamFoam;
+
+startFrom       startTime;
+startTime       0;
+
+stopAt          endTime;
+endTime         300e-6;       // 300 us: laser crosses full 300 um scan track
+
+deltaT          1e-12;
+
+writeControl    adjustableRunTime;
+writeInterval   10e-6;        // write every 10 us
+
+purgeWrite      0;
+
+writeFormat     ascii;
+writePrecision  8;
+writeCompression off;
+
+timeFormat      general;
+timePrecision   8;
+
+runTimeModifiable yes;
+
+adjustTimeStep  yes;
+
+maxCo           0.05;
+maxAlphaCo      0.05;
+// Acoustic CFL at 40 um base cell / 4500 m/s steel sound speed ≈ 9e-9 s.
+// Cap at 2e-8 s: safely above that floor, well below the thermal diffusion scale.
+maxDeltaT       2e-8;
+
+// ************************************************************************* //

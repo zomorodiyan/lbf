@@ -1,0 +1,106 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      thermophysicalProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+//
+// 5-phase system: Cu + Cu_vapour + steel + steel_vapour + air
+// Target: Soysal & Kou 2016 — Cu Grade 110 butt-welded to low-carbon steel
+// Cu and steel are IMMISCIBLE in the liquid state (Cu-Fe phase diagram)
+//
+
+phases (Cu Cu_vapour steel steel_vapour air);
+
+pMin            1000;
+P0              1e5;
+interface_thickness 1e-5;
+
+// Surface tension [N/m]
+// Cu-steel: immiscible liquid pair — interfaceCompression=1 keeps sharp interface
+// sigma between two immiscible liquids is small (~0.1 N/m) — set 0 to avoid
+// spurious capillary forces at the liquid-liquid boundary
+sigmas
+(
+    (Cu_vapour      Cu)         1.1
+    (steel_vapour   steel)      1.9
+    (air            Cu)         1.1
+    (air            steel)      1.9
+    (Cu             steel)      0.0
+    (Cu_vapour      steel)      1.5
+    (steel_vapour   Cu)         1.5
+    (Cu_vapour      steel_vapour) 0.0
+    (Cu_vapour      air)        0.0
+    (steel_vapour   air)        0.0
+);
+
+// Marangoni dσ/dT [N/(m·K)]
+dsigmadT
+(
+    (Cu_vapour      Cu)         -1.3e-4
+    (steel_vapour   steel)      -4.3e-4
+    (air            Cu)         -1.3e-4
+    (air            steel)      -4.3e-4
+    (Cu             steel)      0.0
+    (Cu_vapour      steel)      -2.8e-4
+    (steel_vapour   Cu)         -2.8e-4
+    (Cu_vapour      steel_vapour) 0.0
+    (Cu_vapour      air)        0.0
+    (steel_vapour   air)        0.0
+);
+
+// Vaporisation temperature [K]
+boils
+(
+    (Cu_vapour      Cu)         2835.0
+    (steel_vapour   steel)      3134.0
+);
+
+// Latent heat of vaporisation [J/kg]
+LatentHeatGas
+(
+    (Cu_vapour      Cu)         4.73e6
+    (steel_vapour   steel)      6.09e6
+);
+
+// Interface compression: 1 = sharp (immiscible), 0 = diffuse (miscible)
+interfaceCompression
+(
+    (Cu_vapour      Cu)         1.0
+    (steel_vapour   steel)      1.0
+    (air            Cu)         1.0
+    (air            steel)      1.0
+    (Cu             steel)      1.0
+    (Cu_vapour      steel)      1.0
+    (steel_vapour   Cu)         1.0
+    (Cu_vapour      steel_vapour) 0.0
+    (Cu_vapour      air)        0.0
+    (steel_vapour   air)        0.0
+);
+
+// Fickian diffusion [m^2/s]: 0 for all — Cu/steel immiscible, no mixing
+interfaceDiffusion
+(
+    (Cu_vapour      Cu)         0.0
+    (steel_vapour   steel)      0.0
+    (air            Cu)         0.0
+    (air            steel)      0.0
+    (Cu             steel)      0.0
+    (Cu_vapour      steel)      0.0
+    (steel_vapour   Cu)         0.0
+    (Cu_vapour      steel_vapour) 0.0
+    (Cu_vapour      air)        0.0
+    (steel_vapour   air)        0.0
+);
+
+// ************************************************************************* //

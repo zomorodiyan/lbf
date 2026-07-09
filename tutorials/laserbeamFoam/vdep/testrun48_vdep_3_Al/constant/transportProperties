@@ -1,0 +1,66 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2506                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      transportProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Interface tracking method: isoAdvector or MULES
+interfaceTrackingScheme isoAdvector;
+
+phases          (metal gas);
+
+metal
+{
+    transportModel  Newtonian;
+nu              7.0e-07;   // Al 6061 liquid: ~1.9 mPa.s / 2700 kg/m3
+
+rho             2700;      // Al 6061 density, kg/m3
+
+    Tsolidus 855;          // Al 6061 solidus, K
+    Tliquidus 925;         // Al 6061 liquidus, K
+    LatentHeat 3.97e5;     // Al 6061 fusion latent heat, J/kg
+    beta    2.34e-5;       // Al 6061 liquid thermal expansion, 1/K
+    poly_kappa   (167 0.0 0 0 0 0 0 0);  // Al 6061: ~167 W/(m.K) constant (test run to confirm stability)
+    poly_cp   (896 0.0 0 0 0 0 0 0);    // Al 6061 specific heat, J/(kg.K)
+    elec_resistivity	2.5e-7;  // Al 6061 liquid, Ohm.m (affects Drude absorptivity)
+}
+
+gas
+{
+    transportModel  Newtonian;
+
+nu              1.48e-05;
+
+rho             1;
+
+    poly_kappa   (0.04 0 0 0 0 0 0 0);
+    poly_cp   (520 0.0 0 0 0 0 0 0);
+
+    Tsolidus    1.0;
+    Tliquidus   10.0;
+    LatentHeat  1;
+    beta    4.0e-5;
+}
+
+
+
+sigma            0.87;      // Al 6061 at liquidus, N/m
+Marangoni_Constant	-1.5e-4;   // Al 6061 dsigma/dT, N/(m.K)
+p0	1e5;
+Tvap	2743;          // Al 6061 vaporization temperature, K (pure Al, ~96% Al)
+Mm	0.027;         // Al 6061 molar mass, kg/mol
+LatentHeatVap 1.09e7;  // Al vaporization latent heat, J/kg
+emS                     0.09;  // Al 6061 solid emissivity
+emL                     0.10;  // Al 6061 liquid emissivity
+TRef                    TRef [0 0 0 1 0 0 0]   300;
+// ************************************************************************* //

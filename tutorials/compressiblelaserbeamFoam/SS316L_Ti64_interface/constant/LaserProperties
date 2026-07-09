@@ -1,0 +1,58 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      LaserProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+//
+// Nominal LPBF process parameters for 316L / Ti64 bimaterial scan
+// Laser scans in +x direction across the interface
+// Beam starts at x=50um, crosses interface at x=200um, ends at x=350um
+//
+
+// Laser travels in +x at 1000 mm/s
+timeVsLaserPosition
+{
+    file    "$FOAM_CASE/constant/timeVsLaserPosition";
+    outOfBounds clamp;
+}
+
+timeVsLaserPower
+{
+    file    "$FOAM_CASE/constant/timeVsLaserPower";
+    outOfBounds clamp;
+}
+
+radialPolarHeatSource no;
+
+// Beam direction: downward into substrate in -y (laserHeatSource hardwired to +y entry)
+V_incident      (0 1 0);
+
+// 1/e^2 beam radius = 35 um (typical LPBF spot)
+laserRadius     35e-6;
+
+// Number of ray-tracing sub-divisions per level
+N_sub_divisions 2;
+
+// Nd:YAG / fiber laser wavelength
+wavelength      1.064e-6;
+
+// Free electron number density for Fresnel absorptivity calculation
+// Approximately for steel-like metals
+e_num_density   5.83e29;
+
+Radius_Flavour  2.0;
+
+useLocalSearch  false;
+
+// ************************************************************************* //

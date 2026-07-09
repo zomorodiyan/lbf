@@ -3,62 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>laserbeamFoam — Simulation Guide</title>
+<title>TESTRUNS</title>
 <style>
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    max-width: 860px;
-    margin: 40px auto;
-    padding: 0 24px;
-    color: #222;
-    line-height: 1.6;
-  }
-  h1 { border-bottom: 2px solid #0066cc; padding-bottom: 8px; color: #003d7a; }
-  h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2em; color: #0055aa; }
-  h3 { color: #333; margin-top: 1.5em; }
-  code {
-    background: #f4f4f4;
-    border-radius: 3px;
-    padding: 2px 5px;
-    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-    font-size: 0.9em;
-  }
-  pre {
-    background: #1e1e1e;
-    color: #d4d4d4;
-    border-radius: 6px;
-    padding: 16px;
-    overflow-x: auto;
-    line-height: 1.5;
-  }
-  pre code {
-    background: none;
-    padding: 0;
-    color: inherit;
-    font-size: 0.88em;
-  }
-  table {
-    border-collapse: collapse;
-    width: 100%;
-    margin: 1em 0;
-  }
-  th, td {
-    border: 1px solid #ccc;
-    padding: 8px 12px;
-    text-align: left;
-  }
-  th { background: #eef2f7; font-weight: 600; }
-  tr:nth-child(even) { background: #f9f9f9; }
-  blockquote {
-    border-left: 4px solid #0066cc;
-    margin: 0;
-    padding: 8px 16px;
-    background: #f0f6ff;
-    color: #444;
-  }
-  strong { color: #111; }
-  hr { border: none; border-top: 1px solid #ddd; margin: 2em 0; }
-  a { color: #0066cc; }
+  body { font-family: sans-serif; max-width: 900px; margin: 2em auto; padding: 0 1em; line-height: 1.6; }
+  code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-size: 0.9em; }
+  pre { background: #f4f4f4; padding: 1em; border-radius: 5px; overflow-x: auto; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #ccc; padding: 6px 12px; }
+  th { background: #f0f0f0; }
+  h1, h2, h3 { border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
 </style>
 </head>
 <body>
@@ -114,8 +68,8 @@ docker build --build-arg CACHE_BUST=$(date +%s) -t lbf3 .
 <p>This takes ~10–20 minutes the first time, ~2–5 minutes for subsequent rebuilds.</p>
 <hr />
 <h2>Recommended starting case</h2>
-<p><strong><code>vdep/testrun32_vdep_3_Al</code></strong> — AlSi10Mg, 500 W, 1.5 m/s, 35 µm beam radius, 32 cores.
-This is the baseline VDEP case to start from.</p>
+<p><strong><code>vdep/testrun35_vdep_3_Al</code></strong> — AlSi10Mg, 700 W effective, 6 m/s, 35 µm beam radius, 32 cores, 2-level AMR (→10 µm).
+<strong><code>vdep/testrun36_vdep_3_Al</code></strong> — same parameters, 3-level AMR (→5 µm), 25% longer track. Current active case.</p>
 <hr />
 <h2>Run</h2>
 <pre><code class="language-bash">docker run --rm --shm-size=32g --ulimit memlock=-1 --ulimit stack=67108864 \
@@ -146,6 +100,20 @@ docker wait &lt;container_name&gt;
 <hr />
 <h2>Resume</h2>
 <p>The Allrun script skips <code>decomposePar</code> if <code>processor0/</code> already exists, so just rerun the <strong>Run</strong> command above.</p>
+<p><strong>Multi-stage runs</strong> (e.g. testrun36, testrun43 — different write intervals or power profiles per stage):</p>
+<ol>
+<li>Set <code>endTime</code> and <code>writeInterval</code> in <code>system/controlDict</code> for stage 1 and run normally.</li>
+<li>When stage 1 finishes, <strong>rename the log file</strong> to preserve it:
+   <code>bash
+   mv tutorials/laserbeamFoam/CASE/log.laserbeamFoam \
+      tutorials/laserbeamFoam/CASE/log.laserbeamFoam_stage1</code></li>
+<li>Update <code>endTime</code> and <code>writeInterval</code> (and any other parameters, e.g. <code>timeVsLaserPower</code>) for stage 2.</li>
+<li>Rerun the same <strong>Run</strong> command — OpenFOAM restarts from <code>latestTime</code> automatically, <code>decomposePar</code> is skipped because <code>processor0/</code> already exists.</li>
+<li>Repeat for further stages, incrementing the suffix (<code>_stage2</code>, <code>_stage3</code>, …).</li>
+</ol>
+<p><strong>Example — testrun43</strong> (dense snapshots during violent startup, coarser after):
+- Stage 1: <code>endTime 1e-5</code>, <code>writeInterval 1e-6</code> (0–10 µs, every 1 µs)
+- Stage 2: <code>endTime 1e-4</code>, <code>writeInterval 4e-6</code> (10–100 µs, every 4 µs)</p>
 <hr />
 <h2>Reconstruct for ParaView</h2>
 <p><strong>Always run <code>reconstructParMesh</code> before <code>reconstructPar</code></strong> — it rebuilds the mesh topology
@@ -204,6 +172,174 @@ Files are root-owned (written by Docker), so always use Docker to remove them:</
   &quot;rm -rf /workspace/tutorials/laserbeamFoam/CASE/processor*/&quot;
 </code></pre>
 <hr />
+<h2>multicomponentLaserbeamFoam — the multi-material solver</h2>
+<p><code>multicomponentLaserbeamFoam</code> is the solver used for all N-phase dissimilar-material cases
+(cases in <code>tutorials/compressiblelaserbeamFoam/</code>). It is derived from <code>compressibleLaserbeamFoam</code>
+but treats every gas and vapour phase as <strong>constant-density</strong> (<code>rhoConst</code> EOS, ψ = 0):</p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th><code>laserbeamFoam</code></th>
+<th><code>multicomponentLaserbeamFoam</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Number of metal phases</td>
+<td>1</td>
+<td>N (SS316L + Ti64, Cu + steel, …)</td>
+</tr>
+<tr>
+<td>Gas EOS</td>
+<td>constant ρ</td>
+<td>constant ρ (rhoConst)</td>
+</tr>
+<tr>
+<td>Pressure equation</td>
+<td>incompressible Poisson</td>
+<td>incompressible Poisson</td>
+</tr>
+<tr>
+<td>Acoustic CFL constraint</td>
+<td>none</td>
+<td>none</td>
+</tr>
+<tr>
+<td>Compressible work in TEqn</td>
+<td>no</td>
+<td>no</td>
+</tr>
+</tbody>
+</table>
+<h3>Build (required after any source change)</h3>
+<p>The Dockerfile builds all solvers automatically via <code>./Allwmake</code>. After modifying source code,
+rebuild the image:</p>
+<pre><code class="language-bash">cd ~/lbf3
+docker build --build-arg CACHE_BUST=$(date +%s) -t lbf3 .
+</code></pre>
+<p>To build only this solver inside a running container (faster for iteration):</p>
+<pre><code class="language-bash">docker run --rm -v $(pwd):/workspace lbf3 bash -lc \
+  &quot;cd /workspace/applications/solvers/multicomponentLaserbeamFoam &amp;&amp; ./Allwmake&quot;
+</code></pre>
+<hr />
+<h2>Multi-material case: SS316L / Ti-6Al-4V interface</h2>
+<p>Case path: <code>tutorials/compressiblelaserbeamFoam/SS316L_Ti64_interface</code></p>
+<p>Uses <code>multicomponentLaserbeamFoam</code> (5-phase: SS316L + vapour, Ti64 + vapour, air).
+Domain: 400 × 160 × 200 µm. Base mesh: 40 µm. 3 AMR levels → 5 µm finest.
+Laser: 200 W, 1000 mm/s, 35 µm radius, scans +x across the 316L/Ti64 interface.
+Physical time: 300 µs. Decomposed across 32 cores (hierarchical, n=2×2×8).</p>
+<h3>Run</h3>
+<pre><code class="language-bash">docker run --rm --shm-size=32g --ulimit memlock=-1 --ulimit stack=67108864 \
+  --ipc=host --cpus=32 --memory=76g \
+  -v $(pwd):/workspace lbf3 bash -lc \
+  &quot;cd /workspace/tutorials/compressiblelaserbeamFoam/SS316L_Ti64_interface &amp;&amp; bash ./Allrun &amp;&amp; echo RUN_COMPLETE&quot;
+</code></pre>
+<p>Tail the log:</p>
+<pre><code class="language-bash">tail -f tutorials/compressiblelaserbeamFoam/SS316L_Ti64_interface/log.multicomponentLaserbeamFoam
+</code></pre>
+<h3>Pause</h3>
+<pre><code class="language-bash">docker exec &lt;container_name&gt; bash -lc \
+  &quot;cd /workspace/tutorials/compressiblelaserbeamFoam/SS316L_Ti64_interface &amp;&amp; \
+   foamDictionary -entry stopAt -set writeNow system/controlDict&quot;
+docker wait &lt;container_name&gt;
+</code></pre>
+<p>Restore after pause:</p>
+<pre><code class="language-bash">sed -i 's/stopAt.*writeNow;/stopAt          endTime;/' \
+  tutorials/compressiblelaserbeamFoam/SS316L_Ti64_interface/system/controlDict
+</code></pre>
+<h3>Reconstruct</h3>
+<pre><code class="language-bash">docker run --rm -v $(pwd):/workspace lbf3 bash -lc \
+  &quot;cd /workspace/tutorials/compressiblelaserbeamFoam/SS316L_Ti64_interface &amp;&amp; \
+   reconstructParMesh -noFunctionObjects 2&gt;&amp;1 | tee log.reconstructParMesh &amp;&amp; \
+   reconstructPar    -noFunctionObjects 2&gt;&amp;1 | tee log.reconstructPar&quot;
+</code></pre>
+<h3>Running concurrently with another case</h3>
+<p>The two containers are independent processes — Docker imposes the <code>--cpus</code> and <code>--memory</code> limits
+per container, so as long as the combined totals fit your hardware, both run simultaneously.
+Example: two 32-core cases on a 64-core machine:</p>
+<pre><code class="language-bash"># Terminal 1 — existing vdep run (already running, or launch it):
+docker run --rm --shm-size=32g --ulimit memlock=-1 --ulimit stack=67108864 \
+  --ipc=host --cpus=32 --memory=76g \
+  -v $(pwd):/workspace lbf3 bash -lc \
+  &quot;cd /workspace/tutorials/laserbeamFoam/vdep/CASE &amp;&amp; bash ./Allrun &amp;&amp; echo RUN_COMPLETE&quot;
+
+# Terminal 2 — new multi-material case:
+docker run --rm --shm-size=32g --ulimit memlock=-1 --ulimit stack=67108864 \
+  --ipc=host --cpus=32 --memory=76g \
+  -v $(pwd):/workspace lbf3 bash -lc \
+  &quot;cd /workspace/tutorials/compressiblelaserbeamFoam/SS316L_Ti64_interface &amp;&amp; bash ./Allrun &amp;&amp; echo RUN_COMPLETE&quot;
+</code></pre>
+<p>Both write to separate directories under <code>/workspace</code> so there is no file conflict.</p>
+<hr />
+<h2>Multi-material case: Cu / Low-Carbon Steel (Soysal &amp; Kou replication)</h2>
+<p>Case path: <code>tutorials/compressiblelaserbeamFoam/Cu_LCS_interface</code></p>
+<p>Uses <code>multicomponentLaserbeamFoam</code> (5-phase: Cu + vapour, steel + vapour, air).
+Replicates Soysal &amp; Kou 2016 (Acta Materialia) — macrosegregation in Cu/steel dissimilar welding.</p>
+<p><strong>Domain:</strong> x=5 mm (Cu: 0–4 mm, steel: 4–5 mm), y=2 mm (gas/metal/gas), z=6 mm (scan)
+<strong>Mesh:</strong> 100 µm base, 1 AMR level → 50 µm finest. 50×20×60 = 60,000 base cells.
+<strong>Laser:</strong> 4600 W nominal (~370 W absorbed through Cu), 500 µm radius, conduction mode.
+<strong>Beam center:</strong> x=2.5 mm (1.5 mm offset into Cu from interface at x=4 mm), scans +z at 1 mm/s.
+<strong>Physical time:</strong> 3 s (z=1.5 mm to z=4.5 mm). maxDeltaT=1e-4 s (conduction mode — no keyhole).
+<strong>Decomposition:</strong> 8 cores.</p>
+<h3>Run</h3>
+<pre><code class="language-bash">docker run --rm --shm-size=32g --ulimit memlock=-1 --ulimit stack=67108864 \
+  --ipc=host --cpus=8 --memory=32g \
+  -e OMPI_ALLOW_RUN_AS_ROOT=1 -e OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
+  -v $(pwd):/workspace lbf3 bash -lc \
+  &quot;cd /workspace/tutorials/compressiblelaserbeamFoam/Cu_LCS_interface &amp;&amp; bash ./Allrun &amp;&amp; echo RUN_COMPLETE&quot;
+</code></pre>
+<p>Tail the log:</p>
+<pre><code class="language-bash">tail -f tutorials/compressiblelaserbeamFoam/Cu_LCS_interface/log.multicomponentLaserbeamFoam
+</code></pre>
+<h3>Pause</h3>
+<pre><code class="language-bash">docker exec &lt;container_name&gt; bash -lc \
+  &quot;cd /workspace/tutorials/compressiblelaserbeamFoam/Cu_LCS_interface &amp;&amp; \
+   foamDictionary -entry stopAt -set writeNow system/controlDict&quot;
+docker wait &lt;container_name&gt;
+</code></pre>
+<p>Restore after pause:</p>
+<pre><code class="language-bash">sed -i 's/stopAt.*writeNow;/stopAt          endTime;/' \
+  tutorials/compressiblelaserbeamFoam/Cu_LCS_interface/system/controlDict
+</code></pre>
+<h3>Reconstruct</h3>
+<pre><code class="language-bash">docker run --rm -v $(pwd):/workspace lbf3 bash -lc \
+  &quot;cd /workspace/tutorials/compressiblelaserbeamFoam/Cu_LCS_interface &amp;&amp; \
+   reconstructParMesh -noFunctionObjects 2&gt;&amp;1 | tee log.reconstructParMesh &amp;&amp; \
+   reconstructPar    -noFunctionObjects 2&gt;&amp;1 | tee log.reconstructPar&quot;
+</code></pre>
+<h3>Clean processor dirs</h3>
+<pre><code class="language-bash">docker run --rm -v $(pwd):/workspace lbf3 bash -c \
+  &quot;rm -rf /workspace/tutorials/compressiblelaserbeamFoam/Cu_LCS_interface/processor*/&quot;
+</code></pre>
+<hr />
+<h2>Making videos from ParaView PNG exports</h2>
+<p>ParaView exports image sequences as <code>name.0000.png</code>, <code>name.0001.png</code>, etc. Use <code>ffmpeg</code> to combine them into an mp4.</p>
+<p><strong>Single view (e.g. top view only):</strong></p>
+<pre><code class="language-bash">ffmpeg -y -framerate 5 -i tutorials/laserbeamFoam/vdep/CASE/top.%04d.png \
+  -c:v libx264 -pix_fmt yuv420p -crf 18 \
+  tutorials/laserbeamFoam/vdep/CASE/out.mp4
+</code></pre>
+<p><strong>Two views stacked vertically (top above bottom):</strong></p>
+<pre><code class="language-bash">ffmpeg -y -framerate 5 -i tutorials/laserbeamFoam/vdep/CASE/top.%04d.png \
+  -framerate 5 -i tutorials/laserbeamFoam/vdep/CASE/bot.%04d.png \
+  -filter_complex &quot;[0:v][1:v]vstack=inputs=2&quot; \
+  -c:v libx264 -pix_fmt yuv420p -crf 18 -r 5 \
+  tutorials/laserbeamFoam/vdep/CASE/out.mp4
+</code></pre>
+<p><strong>Two views side by side:</strong></p>
+<pre><code class="language-bash">ffmpeg -y -framerate 5 -i tutorials/laserbeamFoam/vdep/CASE/left.%04d.png \
+  -framerate 5 -i tutorials/laserbeamFoam/vdep/CASE/right.%04d.png \
+  -filter_complex &quot;[0:v][1:v]hstack=inputs=2&quot; \
+  -c:v libx264 -pix_fmt yuv420p -crf 18 -r 5 \
+  tutorials/laserbeamFoam/vdep/CASE/out.mp4
+</code></pre>
+<p>Notes:
+- Adjust <code>--framerate</code> to control playback speed (5 fps is good for melt pool animations).
+- <code>-crf 18</code> gives high quality; increase to 23–28 for smaller files.
+- If frames have different resolutions, add <code>-vf scale=WIDTH:HEIGHT</code> before the output to normalise.
+- Output is at <code>\\wsl$\Ubuntu\home\mzomoro1\bin\lbf3\...</code> when browsing from Windows.</p>
+<hr />
 <h2>Notes</h2>
 <ul>
 <li>Run all <code>docker run</code> commands from the repo root (<code>~/lbf3</code>) so <code>$(pwd)</code> resolves correctly.</li>
@@ -212,6 +348,7 @@ Files are root-owned (written by Docker), so always use Docker to remove them:</
 <li>Processor dirs are root-owned because Docker runs as root; always use Docker (not <code>sudo rm</code>) to delete them.</li>
 <li>PLC reference cases (testruns 1–29) live under <code>tutorials/laserbeamFoam/plc/</code>.</li>
 <li>VDEP cases (testruns 30+) live under <code>tutorials/laserbeamFoam/vdep/</code>.</li>
+<li>Multi-material cases live under <code>tutorials/compressiblelaserbeamFoam/</code> and use <code>multicomponentLaserbeamFoam</code>.</li>
 </ul>
 </body>
 </html>

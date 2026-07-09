@@ -1,0 +1,65 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2506                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      thermophysicalProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+//
+// 3-phase system: Cu + steel + air
+// Vapour phases removed — vaporisation handled via recoil pressure only.
+// Cu and steel are IMMISCIBLE in the liquid state (Cu-Fe phase diagram).
+//
+
+phases (Cu steel air);
+
+pMin            1000;
+P0              1e5;
+interface_thickness 1e-5;
+
+// Surface tension [N/m]
+sigmas
+(
+    (air   Cu)    1.1
+    (air   steel) 1.9
+    (Cu    steel) 0.0
+);
+
+// Marangoni dσ/dT [N/(m·K)]
+dsigmadT
+(
+    (air   Cu)    -1.3e-4
+    (air   steel) -4.3e-4
+    (Cu    steel)  0.0
+);
+
+// No vapour phases — boils/LatentHeatGas not needed
+boils ();
+LatentHeatGas ();
+
+// Interface compression: 1 = sharp (immiscible), 0 = diffuse (miscible)
+interfaceCompression
+(
+    (air   Cu)    1.0
+    (air   steel) 1.0
+    (Cu    steel) 1.0
+);
+
+// Fickian diffusion [m^2/s]: 0 — Cu/steel immiscible
+interfaceDiffusion
+(
+    (air   Cu)    0.0
+    (air   steel) 0.0
+    (Cu    steel) 0.0
+);
+
+// ************************************************************************* //

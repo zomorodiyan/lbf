@@ -1,0 +1,10 @@
+(
+    // time(s)    position(x y z) in metres
+    // x = 80e-6: domain midplane in x (160um/2)
+    // y = 200e-6: laser at top surface (high-y open face)
+    // Scans +z at 1000 mm/s = 1 m/s
+    // Starts at z=50um on SS316L side, crosses interface at z=200um at t=150us
+    // Ends at z=350um on Ti64 side at t=300us
+    (0          (80e-6  200e-6  50e-6 ))
+    (300e-6     (80e-6  200e-6  350e-6))
+)

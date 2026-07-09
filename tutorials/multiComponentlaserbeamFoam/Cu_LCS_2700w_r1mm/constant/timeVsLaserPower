@@ -1,0 +1,9 @@
+(
+    // 2700 W nominal (~370 W absorbed at ~13.8%) — physically motivated target.
+    // Matches GTAW arc energy: 570 W × 65% arc efficiency = 370 W absorbed.
+    // Equivalent to: 370 W / 0.138 absorptivity = 2681 W nominal (rounded to 2700 W).
+    (0       0)
+    (0.005   2700)
+    (3.0     2700)
+    (3.001   0)
+)

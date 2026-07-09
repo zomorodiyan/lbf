@@ -45,7 +45,11 @@ if (damperSwitch)
     damper.correctBoundaryConditions();  // ADDED
 }
 
-pVap = 0.54*p0*Foam::exp(LatentHeatVap*Mm*((T - Tvap)/(R*T*Tvap)));
+const volScalarField TsafeU
+(
+    max(T, dimensionedScalar("Tmin", dimTemperature, scalar(300.0)))
+);
+pVap = 0.54*p0*Foam::exp(LatentHeatVap*Mm*((TsafeU - Tvap)/(R*TsafeU*Tvap)));
 pVap.correctBoundaryConditions();  // ADDED
 
 

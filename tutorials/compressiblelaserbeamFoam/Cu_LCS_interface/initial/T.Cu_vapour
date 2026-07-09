@@ -1,0 +1,18 @@
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    object      T.Cu_vapour;
+}
+dimensions      [0 0 0 1 0 0 0];
+internalField   uniform 300;
+boundaryField
+{
+    topWall     { type zeroGradient; }
+    bottomWall  { type zeroGradient; }
+    leftWall    { type zeroGradient; }
+    rightWall   { type zeroGradient; }
+    front       { type zeroGradient; }
+    back        { type zeroGradient; }
+}

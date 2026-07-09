@@ -1,0 +1,94 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      blockMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+//
+// Coordinate system:
+//   x = width / across joint  (5000 um = 5 mm)
+//                               x in [0,    4000um] = Cu (Grade 110)   — 40 base cells
+//                               x in [4000, 5000um] = low-carbon steel — 10 base cells
+//                               interface at x=4000um, parallel to y-z plane
+//                               beam center at x=2500um (1.5mm offset into Cu from interface)
+//   y = build / depth         (2000 um total)
+//                               y in [0,    400um]  = gas below (4 base cells)
+//                               y in [400,  1600um] = metal substrate 1.2 mm (12 base cells)
+//                               y in [1600, 2000um] = gas above surface (4 base cells)
+//   z = scan direction        (6000 um = 6 mm, 60 base cells)
+//                               laser travels ALONG the joint (parallel to interface)
+//                               laser track: z=1500um to z=4500um (3mm at 1mm/s = 3s)
+//
+// Laser enters from topWall (high-y face, y=2000um). Gas on top and bottom, metal in middle.
+// Base cell: 200 um -> 25 x 10 x 30 = 7500 cells. 1 AMR level -> 100 um finest.
+//
+// Vertex layout (x, y, z):
+//   0=(0,       0,        0       )   1=(5000e-6, 0,        0       )
+//   2=(5000e-6, 0,        6000e-6 )   3=(0,       0,        6000e-6 )
+//   4=(0,       2000e-6,  0       )   5=(5000e-6, 2000e-6,  0       )
+//   6=(5000e-6, 2000e-6,  6000e-6 )   7=(0,       2000e-6,  6000e-6 )
+
+convertToMeters 1.0;
+
+vertices
+(
+    (0         0         0       )  //0  (x=0,    y=0,     z=0   )
+    (5000e-6   0         0       )  //1  (x=5mm,  y=0,     z=0   )
+    (5000e-6   2000e-6   0       )  //2  (x=5mm,  y=2mm,   z=0   )
+    (0         2000e-6   0       )  //3  (x=0,    y=2mm,   z=0   )
+    (0         0         6000e-6 )  //4  (x=0,    y=0,     z=6mm )
+    (5000e-6   0         6000e-6 )  //5  (x=5mm,  y=0,     z=6mm )
+    (5000e-6   2000e-6   6000e-6 )  //6  (x=5mm,  y=2mm,   z=6mm )
+    (0         2000e-6   6000e-6 )  //7  (x=0,    y=2mm,   z=6mm )
+);
+
+blocks
+(
+    // 0→1: +x (50 cells), 0→3: +y (20 cells), 0→4: +z (60 cells)
+    hex (0 1 2 3 4 5 6 7) (25 10 30) simpleGrading (1 1 1)
+);
+
+boundary
+(
+    topWall        // laser entry — high-y open face (gas above), y=2mm
+    {
+        type patch;
+        faces ( (3 2 6 7) );
+    }
+    bottomWall     // open gas below — low-y patch, y=0
+    {
+        type patch;
+        faces ( (0 1 5 4) );
+    }
+    leftWall       // x=0 side
+    {
+        type patch;
+        faces ( (0 4 7 3) );
+    }
+    rightWall      // x=5mm side (steel far wall)
+    {
+        type patch;
+        faces ( (1 2 6 5) );
+    }
+    front          // z=6mm scan end
+    {
+        type patch;
+        faces ( (4 5 6 7) );
+    }
+    back           // z=0 scan start
+    {
+        type patch;
+        faces ( (0 3 2 1) );
+    }
+);
+
+// ************************************************************************* //

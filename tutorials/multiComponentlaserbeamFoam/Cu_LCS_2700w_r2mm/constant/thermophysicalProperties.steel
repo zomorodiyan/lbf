@@ -1,0 +1,63 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      thermophysicalProperties.steel;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+//
+// Low-carbon steel (Soysal & Kou 2016)
+// Sources: Mills 2002, Heeling et al. 2017
+//
+
+phaseState      condensed;
+
+thermoType
+{
+    type            heRhoThermo;
+    mixture         pureMixture;
+    transport       const;
+    thermo          hConst;
+    equationOfState rhoConst;
+    specie          specie;
+    energy          sensibleInternalEnergy;
+}
+
+TSolidus            1768.0;   // K  (~1495 C)
+TLiquidus           1798.0;   // K  (~1525 C)
+LatentHeat          2.72e5;   // J/kg
+elec_conductivity   7.14e5;   // S/m liquid (~1.4e-6 Ohm.m)
+magnetic_permeability 1.256e-6;
+
+mixture
+{
+    specie
+    {
+        molWeight   55.8;
+    }
+    equationOfState
+    {
+        rho     7200;         // kg/m3 constant density
+    }
+    thermodynamics
+    {
+        Cp      800;          // J/(kg.K) liquid
+        Hf      0;
+    }
+    transport
+    {
+        mu      6.0e-3;       // Pa.s liquid viscosity
+        Pr      0.07;
+    }
+}
+
+// ************************************************************************* //

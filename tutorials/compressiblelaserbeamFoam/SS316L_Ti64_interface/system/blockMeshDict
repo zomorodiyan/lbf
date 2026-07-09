@@ -1,0 +1,85 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      blockMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+//
+// Coordinate system:
+//   x = width           (160 um)
+//   y = build / depth   (200 um, y=0 substrate bottom, y=200um open top)
+//   z = scan direction  (400 um)
+//
+// Laser enters from topWall (high-y face). Substrate at low y.
+// Interface between SS316L (z<200um) and Ti64 (z>200um) at z=200um.
+// Base cell: 40 um -> 4 x 5 x 10 cells. 3 AMR levels -> 5 um finest.
+//
+// Vertex layout (x, y, z):
+//   0=(0,       0,      0      )   1=(160e-6,  0,      0      )
+//   2=(160e-6,  0,      400e-6 )   3=(0,       0,      400e-6 )
+//   4=(0,       200e-6, 0      )   5=(160e-6,  200e-6, 0      )
+//   6=(160e-6,  200e-6, 400e-6 )   7=(0,       200e-6, 400e-6 )
+
+convertToMeters 1.0;
+
+vertices
+(
+    (0        0        0      )  //0
+    (160e-6   0        0      )  //1
+    (160e-6   0        400e-6 )  //2
+    (0        0        400e-6 )  //3
+    (0        200e-6   0      )  //4
+    (160e-6   200e-6   0      )  //5
+    (160e-6   200e-6   400e-6 )  //6
+    (0        200e-6   400e-6 )  //7
+);
+
+blocks
+(
+    hex (0 1 2 3 4 5 6 7) (4 5 10) simpleGrading (1 1 1)
+);
+
+boundary
+(
+    topWall        // laser entry — high-y open face
+    {
+        type patch;
+        faces ( (4 5 6 7) );
+    }
+    bottomWall     // substrate bottom — low-y wall
+    {
+        type wall;
+        faces ( (0 3 2 1) );
+    }
+    leftWall       // x=0 side
+    {
+        type patch;
+        faces ( (0 4 7 3) );
+    }
+    rightWall      // x=160um side
+    {
+        type patch;
+        faces ( (1 2 6 5) );
+    }
+    front          // z=400um scan end
+    {
+        type patch;
+        faces ( (3 7 6 2) );
+    }
+    back           // z=0 scan start
+    {
+        type patch;
+        faces ( (0 1 5 4) );
+    }
+);
+
+// ************************************************************************* //

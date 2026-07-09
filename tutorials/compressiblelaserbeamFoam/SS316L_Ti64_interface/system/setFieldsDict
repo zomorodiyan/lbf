@@ -1,0 +1,67 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      setFieldsDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+//
+// y is the build/depth direction: y=0 substrate bottom, y=200um open top.
+// Substrate occupies y in [0, 120um] (3 base cells deep).
+// Gas occupies y in [120um, 200um].
+// Back half (z < 200um): SS316L substrate
+// Front half (z >= 200um): Ti64 substrate
+// Interface at z=200um, laser scans in +z across it.
+//
+
+defaultFieldValues
+(
+    volScalarFieldValue alpha.air           1
+    volScalarFieldValue alpha.SS316L        0
+    volScalarFieldValue alpha.SS316L_vapour 0
+    volScalarFieldValue alpha.Ti64          0
+    volScalarFieldValue alpha.Ti64_vapour   0
+    volVectorFieldValue U                   (0 0 0)
+);
+
+regions
+(
+    // SS316L bare plate: z in [0, 200um], y in [0, 120um]
+    boxToCell
+    {
+        box (0 0 0) (160e-6 120e-6 200e-6);
+        fieldValues
+        (
+            volScalarFieldValue alpha.air           0
+            volScalarFieldValue alpha.SS316L        1
+            volScalarFieldValue alpha.SS316L_vapour 0
+            volScalarFieldValue alpha.Ti64          0
+            volScalarFieldValue alpha.Ti64_vapour   0
+        );
+    }
+
+    // Ti64 bare plate: z in [200um, 400um], y in [0, 120um]
+    boxToCell
+    {
+        box (0 0 200e-6) (160e-6 120e-6 400e-6);
+        fieldValues
+        (
+            volScalarFieldValue alpha.air           0
+            volScalarFieldValue alpha.SS316L        0
+            volScalarFieldValue alpha.SS316L_vapour 0
+            volScalarFieldValue alpha.Ti64          1
+            volScalarFieldValue alpha.Ti64_vapour   0
+        );
+    }
+);
+
+// ************************************************************************* //

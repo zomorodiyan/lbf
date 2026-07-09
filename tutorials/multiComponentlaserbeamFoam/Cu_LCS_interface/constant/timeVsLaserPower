@@ -1,0 +1,8 @@
+(
+    // 1500 W nominal (~207 W absorbed at ~13.8%) — step up from 1000 W run.
+    // Expect deeper Cu melt pool; steel should still stay solid (Tliq=1798K).
+    (0       0)
+    (0.005   1500)
+    (3.0     1500)
+    (3.001   0)
+)

@@ -1,0 +1,11 @@
+(
+    // Ramp up in first 5 us to avoid pressure spike, then hold at 200 W
+    (0          0)
+    (1e-8       40)
+    (2e-8       80)
+    (3e-8       120)
+    (5e-8       200)
+    (295e-6     200)
+    (295.1e-6   0)
+    (300e-6     0)
+)

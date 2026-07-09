@@ -1,0 +1,66 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2506                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      transportProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Interface tracking method: isoAdvector or MULES
+interfaceTrackingScheme isoAdvector;
+
+phases          (metal gas);
+
+metal
+{
+    transportModel  Newtonian;
+nu              1.0e-06;   // AlSi10Mg liquid: ~3 mPa.s / 2670 kg/m3
+
+rho             2670;      // AlSi10Mg solid density, kg/m3
+
+	Tsolidus 750;          // AlSi10Mg physical solidus ~843K; widened to 750K for numerical stability
+	Tliquidus 880;         // AlSi10Mg liquidus ~607 C
+    LatentHeat 4.0e5;      // AlSi10Mg fusion latent heat, J/kg
+    beta    1.1e-4;        // AlSi10Mg liquid thermal expansion, 1/K
+    poly_kappa   (110 -0.010 0 0 0 0 0 0);  // AlSi10Mg: ~107 W/(m.K) at 300K, ~101 at 880K, ~80 at 3000K (stays positive)
+    poly_cp   (900 0.0 0 0 0 0 0 0);        // AlSi10Mg specific heat, J/(kg.K)
+    elec_resistivity	3.0e-7;  // AlSi10Mg liquid ~3e-7 Ohm.m (estimated; affects Drude absorptivity)
+}
+
+gas
+{
+    transportModel  Newtonian;
+
+nu              1.48e-05;
+
+rho             1;
+
+    poly_kappa   (0.04 0 0 0 0 0 0 0);
+    poly_cp   (520 0.0 0 0 0 0 0 0);
+    
+    Tsolidus    1.0;
+    Tliquidus   10.0;
+    LatentHeat  1;
+    beta    4.0e-5;
+}
+
+
+
+sigma            0.87;      // AlSi10Mg at liquidus, N/m (Egry et al.)
+Marangoni_Constant	-1.5e-4;   // AlSi10Mg dsigma/dT, N/(m.K) — UNCERTAIN, verify for alloy
+p0	1e5;
+Tvap	2900;          // AlSi10Mg effective evaporation onset, K (calibrated to target 350um keyhole; pure Al=2743K)
+Mm	0.027;         // AlSi10Mg molar mass ~0.9*Al + 0.1*Si, kg/mol
+LatentHeatVap 1.09e7;  // Al vaporization latent heat, J/kg
+emS                     0.09;  // AlSi10Mg powder, IR (Al alloys are highly reflective)
+emL                     0.10;  // AlSi10Mg liquid emissivity
+TRef                    TRef [0 0 0 1 0 0 0]   300;
+// ************************************************************************* //

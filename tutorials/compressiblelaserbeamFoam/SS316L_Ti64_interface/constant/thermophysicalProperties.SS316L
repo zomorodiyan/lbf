@@ -1,0 +1,66 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      thermophysicalProperties.SS316L;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+//
+// 316L Stainless Steel (liquid phase)
+// Sources: Heeling et al. 2017, Mills 2002, Pichler et al. 2020
+//
+
+phaseState      condensed;
+
+thermoType
+{
+    type            heRhoThermo;
+    mixture         pureMixture;
+    transport       const;
+    thermo          hConst;
+    equationOfState adiabaticPerfectFluid;
+    specie          specie;
+    energy          sensibleInternalEnergy;
+}
+
+TSolidus            1648.0;   // K  (~1375 C)
+TLiquidus           1673.0;   // K  (~1400 C)
+LatentHeat          2.7e5;    // J/kg
+elec_conductivity   8.33e5;   // S/m  (resistivity ~1.2e-6 Ohm.m at liquidus)
+magnetic_permeability 1.256e-6;
+
+mixture
+{
+    specie
+    {
+        molWeight   55.9;     // g/mol  (Fe-dominant)
+    }
+    equationOfState
+    {
+        p0      1e5;
+        rho0    6900;         // kg/m3 liquid density
+        gamma   1.2;
+        B       1e9;
+    }
+    thermodynamics
+    {
+        Cp      770;          // J/(kg.K) liquid
+        Hf      0;
+    }
+    transport
+    {
+        mu      6.0e-3;       // Pa.s dynamic viscosity (liquid)
+        Pr      0.07;
+    }
+}
+
+// ************************************************************************* //

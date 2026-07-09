@@ -1,0 +1,66 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      thermophysicalProperties.Ti64;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+//
+// Ti-6Al-4V (liquid phase)
+// Sources: Boivineau et al. 2006, Khairallah et al. 2016, Mills 2002
+//
+
+phaseState      condensed;
+
+thermoType
+{
+    type            heRhoThermo;
+    mixture         pureMixture;
+    transport       const;
+    thermo          hConst;
+    equationOfState adiabaticPerfectFluid;
+    specie          specie;
+    energy          sensibleInternalEnergy;
+}
+
+TSolidus            1878.0;   // K  (~1605 C)
+TLiquidus           1928.0;   // K  (~1655 C)
+LatentHeat          2.86e5;   // J/kg
+elec_conductivity   5.56e5;   // S/m  (resistivity ~1.8e-6 Ohm.m at liquidus)
+magnetic_permeability 1.256e-6;
+
+mixture
+{
+    specie
+    {
+        molWeight   47.9;     // g/mol  (Ti-dominant)
+    }
+    equationOfState
+    {
+        p0      1e5;
+        rho0    3920;         // kg/m3 liquid density at Tliquidus
+        gamma   1.2;
+        B       1e9;
+    }
+    thermodynamics
+    {
+        Cp      831;          // J/(kg.K) liquid
+        Hf      0;
+    }
+    transport
+    {
+        mu      3.0e-3;       // Pa.s dynamic viscosity (liquid)
+        Pr      0.04;
+    }
+}
+
+// ************************************************************************* //

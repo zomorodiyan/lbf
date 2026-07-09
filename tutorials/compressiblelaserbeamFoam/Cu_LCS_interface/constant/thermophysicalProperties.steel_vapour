@@ -1,0 +1,63 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      thermophysicalProperties.steel_vapour;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+//
+// Low-carbon steel vapour phase — rhoConst: constant density, psi=0.
+//
+
+phaseState      gaseous;
+
+thermoType
+{
+    type            heRhoThermo;
+    mixture         pureMixture;
+    transport       const;
+    thermo          hConst;
+    equationOfState rhoConst;
+    specie          specie;
+    energy          sensibleInternalEnergy;
+}
+
+TSolidus    5.0;
+TLiquidus   10.0;
+LatentHeat  1.0;
+
+elec_conductivity   1.0;
+magnetic_permeability 1.256e-6;
+
+mixture
+{
+    specie
+    {
+        molWeight   55.8;
+    }
+    equationOfState
+    {
+        rho     0.5;
+    }
+    thermodynamics
+    {
+        Cp      520;
+        Hf      0;
+    }
+    transport
+    {
+        mu      1.0e-5;
+        Pr      1.0;
+    }
+}
+
+// ************************************************************************* //

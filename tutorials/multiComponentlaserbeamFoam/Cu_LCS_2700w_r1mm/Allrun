@@ -1,0 +1,18 @@
+#!/bin/sh
+cd "${0%/*}" || exit
+
+. $WM_PROJECT_DIR/bin/tools/RunFunctions
+
+echo "Copying 'initial' to '0'"
+cp -r initial 0
+
+runApplication blockMesh
+runApplication setFields
+
+if [ -d processor0 ]; then
+    echo "processor* directories exist — skipping decomposePar (resuming)"
+else
+    runApplication decomposePar
+fi
+
+runParallel multicomponentLaserbeamFoam

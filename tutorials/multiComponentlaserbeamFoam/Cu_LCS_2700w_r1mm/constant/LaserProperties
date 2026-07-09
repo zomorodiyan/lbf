@@ -1,0 +1,51 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      LaserProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+//
+// Cu / low-carbon steel butt weld — laser process parameters
+// Laser scans +z, crosses Cu/steel interface at z=200um at t=150us
+//
+
+radialPolarHeatSource yes;
+
+timeVsLaserPosition
+{
+    file    "$FOAM_CASE/constant/timeVsLaserPosition";
+    outOfBounds clamp;
+}
+
+timeVsLaserPower
+{
+    file    "$FOAM_CASE/constant/timeVsLaserPower";
+    outOfBounds clamp;
+}
+
+V_incident      (0 -1 0);    // rays fire downward (-y) from laser position inside gas layer
+
+laserRadius     1000e-6;     // 1mm beam radius — intermediate between 500µm (too small) and 2mm (too slow)
+
+nRadial         20;
+nAngular        72;
+
+wavelength      1.064e-6;    // Nd:YAG / fiber laser
+
+e_num_density   5.83e29;     // free electron density for Fresnel absorptivity
+
+Radius_Flavour  2.0;
+
+useLocalSearch  false;
+
+// ************************************************************************* //

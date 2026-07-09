@@ -1,0 +1,8 @@
+(
+    // Laser INSIDE the top gas layer at y=1700um (300um below topWall, above metal surface at y=1600um)
+    // x=2500um (1.5mm offset into Cu from interface at x=4000um)
+    // Scans +z at 1 mm/s along the joint, parallel to the Cu/steel interface
+    // Starts at z=1500um, ends at z=4500um over 3 seconds
+    (0      (2500e-6  1700e-6  1500e-6))
+    (3.0    (2500e-6  1700e-6  4500e-6))
+)
