@@ -1,6 +1,7 @@
 {
     const scalarField& alpha1I = alpha1;
     const scalarField& TI = T;
+    const scalarField& epsilon1I = epsilon1;
     scalarField& kappaI = kappa;
     scalarField& cpI = cp;
     forAll(kappaI, celli)
@@ -8,7 +9,12 @@
         kappaI[celli] =
             (
                 max(min(alpha1I[celli], 1.0), 0.0)
-               *(polykappa_m.value(TI[celli]))
+               *(
+                    useLiquidKappa
+                  ? (1.0 - epsilon1I[celli])*polykappa_m.value(TI[celli])
+                  + epsilon1I[celli]*polykappa_m_liquidPtr().value(TI[celli])
+                  : polykappa_m.value(TI[celli])
+                )
             )
           + (
                 (1.0 - max(min(alpha1I[celli], 1.0), 0.0))

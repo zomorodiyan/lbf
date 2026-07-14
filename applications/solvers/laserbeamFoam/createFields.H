@@ -275,8 +275,66 @@ const dimensionedScalar TRef ("TRef",transportProperties);
 const Polynomial<8> polykappa_m(transportPropertiesMetal.lookup("poly_kappa"));
 const Polynomial<8> polykappa_g(transportPropertiesGas.lookup("poly_kappa"));
 
+// If poly_kappa_liquid is present, metal kappa is blended between the
+// (solid) poly_kappa and this liquid-branch polynomial using the local
+// liquid fraction epsilon1. Otherwise fall back to poly_kappa alone.
+const bool useLiquidKappa = transportPropertiesMetal.found("poly_kappa_liquid");
+
+autoPtr<Polynomial<8>> polykappa_m_liquidPtr;
+if (useLiquidKappa)
+{
+    polykappa_m_liquidPtr.reset
+    (
+        new Polynomial<8>(transportPropertiesMetal.lookup("poly_kappa_liquid"))
+    );
+    Info << "kappa: liquid-fraction-blended metal conductivity via poly_kappa_liquid" << nl << endl;
+}
+
 const Polynomial<8> polycp_m(transportPropertiesMetal.lookup("poly_cp"));
 const Polynomial<8> polycp_g(transportPropertiesGas.lookup("poly_cp"));
+
+// TSolidus, TLiquidus and epsilon1 are declared here (ahead of cp/kappa) because
+// updateKappaCp.H (included below to give cp/kappa their initial values) needs
+// epsilon1 for the liquid-fraction-blended kappa when useLiquidKappa is set.
+volScalarField TSolidus
+(
+    IOobject
+    (
+        "TSolidus",
+        runTime.timeName(),
+        mesh,
+        IOobject::NO_READ,
+        IOobject::AUTO_WRITE
+    ),
+    alpha1*Tsolidus1 + (1.0 - alpha1)*Tsolidus2
+);
+
+
+volScalarField TLiquidus
+(
+    IOobject
+    (
+        "TLiquidus",
+        runTime.timeName(),
+        mesh,
+        IOobject::NO_READ,
+        IOobject::AUTO_WRITE
+    ),
+    alpha1*Tliquidus1 + (1.0 - alpha1)*Tliquidus2
+);
+
+volScalarField epsilon1
+(
+    IOobject
+    (
+        "epsilon1",
+        runTime.timeName(),
+        mesh,
+        IOobject::READ_IF_PRESENT,
+        IOobject::AUTO_WRITE
+    ),
+    max(min((T - TSolidus)/(TLiquidus - TSolidus), 1.0), 0.0)
+);
 
 volScalarField cp
 (
@@ -308,34 +366,6 @@ volScalarField kappa
 
 #include "updateKappaCp.H"
 
-
-volScalarField TSolidus
-(
-    IOobject
-    (
-        "TSolidus",
-        runTime.timeName(),
-        mesh,
-        IOobject::NO_READ,
-        IOobject::AUTO_WRITE
-    ),
-    alpha1*Tsolidus1 + (1.0 - alpha1)*Tsolidus2
-);
-
-
-volScalarField TLiquidus
-(
-    IOobject
-    (
-        "TLiquidus",
-        runTime.timeName(),
-        mesh,
-        IOobject::NO_READ,
-        IOobject::AUTO_WRITE
-    ),
-    alpha1*Tliquidus1 + (1.0 - alpha1)*Tliquidus2
-);
-
 volScalarField DC
 (
     IOobject
@@ -361,19 +391,6 @@ volScalarField metalaverage
         IOobject::NO_WRITE
     ),
     fvc::average(alpha1)
-);
-
-volScalarField epsilon1
-(
-    IOobject
-    (
-        "epsilon1",
-        runTime.timeName(),
-        mesh,
-        IOobject::READ_IF_PRESENT,
-        IOobject::AUTO_WRITE
-    ),
-    max(min((T - TSolidus)/(TLiquidus - TSolidus), 1.0), 0.0)
 );
 
 volVectorField n_filtered
