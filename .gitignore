@@ -148,3 +148,6 @@ linuxming*/
 SiCortex*Gcc*/
 solaris*Gcc*/
 SunOS*Gcc*/
+
+# local email drafts - not for commit
+report/*email-draft*
