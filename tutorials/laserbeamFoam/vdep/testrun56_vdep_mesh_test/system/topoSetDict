@@ -1,0 +1,45 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  2506                                  |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      topoSetDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Static refinement region, 2026-07-23 (see report/jul23-tasks.md), union of
+// two boxes -- re-run this + refineHexMesh 3x (topoSet regenerates the union
+// against the current, already-refined mesh each pass) to reach 5um.
+//
+// Box 1 (deep/narrow): y 100um above surface (0.2mm) to 200um below it
+//   -> 0.1mm to 0.4mm; x +/-100um around the track centerline
+// Box 2 (shallow/wide, surface overflow): y 55um above surface to 5um below
+//   -> 0.145mm to 0.205mm; x +/-250um (widened 2026-07-23, was +/-200um)
+// Both boxes: z full domain (unrestricted)
+
+actions
+(
+    {
+        name    boxToRefine;
+        type    cellSet;
+        action  new;
+        source  boxToCell;
+        box     (-1e-4 1e-4 -1) (1e-4 4e-4 1);
+    }
+    {
+        name    boxToRefine;
+        type    cellSet;
+        action  add;
+        source  boxToCell;
+        box     (-2.5e-4 1.45e-4 -1) (2.5e-4 2.05e-4 1);
+    }
+);
+
+// ************************************************************************* //

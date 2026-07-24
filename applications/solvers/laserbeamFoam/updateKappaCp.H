@@ -7,12 +7,13 @@
     const scalar TvapValue = Tvap.value();
     forAll(kappaI, celli)
     {
-        // poly_kappa_liquid is only fitted up to ~4000K; clamp the argument
-        // at Tvap so cells that numerically overshoot boiling hold at
-        // kappa(Tvap) instead of following the polynomial into negative
-        // values, which would make the diffusion term unconditionally
+        // poly_kappa_liquid/poly_kappa_g are only fitted up to a bounded
+        // range; clamp the argument at Tvap so cells that numerically
+        // overshoot boiling (metal liquid *or* gas/vapour) hold at
+        // kappa(Tvap) instead of following the polynomial past its fitted
+        // range, which would make the diffusion term unconditionally
         // unstable and runaway further.
-        const scalar TliquidKappa = min(TI[celli], TvapValue);
+        const scalar TKappaClamped = min(TI[celli], TvapValue);
 
         kappaI[celli] =
             (
@@ -20,13 +21,13 @@
                *(
                     useLiquidKappa
                   ? (1.0 - epsilon1I[celli])*polykappa_m.value(TI[celli])
-                  + epsilon1I[celli]*polykappa_m_liquidPtr().value(TliquidKappa)
+                  + epsilon1I[celli]*polykappa_m_liquidPtr().value(TKappaClamped)
                   : polykappa_m.value(TI[celli])
                 )
             )
           + (
                 (1.0 - max(min(alpha1I[celli], 1.0), 0.0))
-               *polykappa_g.value(TI[celli])
+               *polykappa_g.value(TKappaClamped)
             );
 
         // Defense-in-depth: never let kappa reach zero/negative regardless

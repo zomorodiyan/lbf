@@ -304,7 +304,7 @@ volScalarField TSolidus
         runTime.timeName(),
         mesh,
         IOobject::NO_READ,
-        IOobject::AUTO_WRITE
+        IOobject::NO_WRITE  // derived/static per-cell value, not read on restart -- skip writing to cut recording size
     ),
     alpha1*Tsolidus1 + (1.0 - alpha1)*Tsolidus2
 );
@@ -318,7 +318,7 @@ volScalarField TLiquidus
         runTime.timeName(),
         mesh,
         IOobject::NO_READ,
-        IOobject::AUTO_WRITE
+        IOobject::NO_WRITE  // derived/static per-cell value, not read on restart -- skip writing to cut recording size
     ),
     alpha1*Tliquidus1 + (1.0 - alpha1)*Tliquidus2
 );
@@ -344,7 +344,7 @@ volScalarField cp
         runTime.timeName(),
         mesh,
         IOobject::NO_READ,
-        IOobject::AUTO_WRITE//change to no write when working
+        IOobject::NO_WRITE  // recomputed from T/alpha.metal each step, not read on restart -- skip writing to cut recording size
     ),
     mesh,
     dimensionedScalar("cp", dimensionSet(0, 2, -2, -1, 0), 0.0)
@@ -358,7 +358,7 @@ volScalarField kappa
         runTime.timeName(),
         mesh,
         IOobject::NO_READ,
-        IOobject::AUTO_WRITE//change to no write when working
+        IOobject::NO_WRITE  // recomputed from T/alpha.metal/epsilon1 each step, not read on restart -- skip writing to cut recording size
     ),
     mesh,
     dimensionedScalar("kappa",dimensionSet(1, 1, -3, -1, 0),0.0)
@@ -570,7 +570,7 @@ volScalarField Qv
         runTime.timeName(),
         mesh,
         IOobject::NO_READ,
-        IOobject::AUTO_WRITE
+        IOobject::NO_WRITE  // recomputed each step, not read on restart -- skip writing to cut recording size
     ),
     mesh,
     dimensionedScalar("0", dimensionSet(1,0,-3,0,0,0,0), 0.0)
