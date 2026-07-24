@@ -301,6 +301,43 @@ pattern, none of them have been run yet — each needs its predecessor's
 final timestep manually copied in first (testrun58 must actually be run
 before testrun59 can be seeded, etc.).
 
+### Renumbered to add a 32-core seed lineage (2026-07-23)
+
+Decomposition must stay identical across an entire seed→fork lineage,
+since continuation `Allrun` scripts read their own `system/decomposeParDict`
+rather than inspecting the `processor*/` directories they were seeded with
+— a core-count change can only happen at a fresh `decomposePar` (i.e. at a
+seed stage), not mid-lineage. To let 4 of the 6 power forks run at 32 cores
+instead of 16 (better throughput for the higher-power, presumably
+slower-converging cases) without touching the already-validated 16-core
+seed, a second seed lineage was added: `testrun60`/`testrun61` are 32-core
+copies of `testrun58`/`testrun59` (same geometry/mesh/fields/power, only
+`decomposeParDict` differs: `numberOfSubdomains 32; n (2 2 8)` vs. `16;
+n (2 1 8)`). This pushed the six power forks from testrun60–65 up to
+testrun62–67. Final numbering (seed-0_16c, seed-1_16c, seed-0_32c,
+seed-1_32c, then forks low→high power):
+
+| Case | Role | Time window | Power | Cores |
+|---|---|---|---|---|
+| `testrun58_vdep_3_Al` | seed-0_16c | 0–20µs | 1000 W | 16 |
+| `testrun59_vdep_3_Al` | seed-1_16c | 20–100µs | 650 W | 16 |
+| `testrun60_vdep_3_Al` | seed-0_32c | 0–20µs | 1000 W | 32 |
+| `testrun61_vdep_3_Al` | seed-1_32c | 20–100µs | 650 W | 32 |
+| `testrun62_vdep_3_Al` | fork, seeded from testrun59 (16c) | 100–400µs | 650 W | 16 |
+| `testrun63_vdep_3_Al` | fork, seeded from testrun59 (16c) | 100–400µs | 700 W | 16 |
+| `testrun64_vdep_3_Al` | fork, seeded from testrun61 (32c) | 100–400µs | 750 W | 32 |
+| `testrun65_vdep_3_Al` | fork, seeded from testrun61 (32c) | 100–400µs | 800 W | 32 |
+| `testrun66_vdep_3_Al` | fork, seeded from testrun61 (32c) | 100–400µs | 850 W | 32 |
+| `testrun67_vdep_3_Al` | fork, seeded from testrun61 (32c) | 100–400µs | 900 W | 32 |
+
+650W/700W (the two forks closest to the seed's own 650W steady stage) kept
+the original 16-core lineage; 750–900W moved to the new 32-core lineage.
+None of the Allrun scripts hardcode a source case number (continuation
+stages just expect `processor*/` dirs to be copied in manually per
+TESTRUNS.md), so the renumbering didn't require any script edits — file
+diffs are limited to `decomposeParDict` (core count) and
+`timeVsLaserPower`/`controlDict` (power/endTime, already case-specific).
+
 **Still open / not yet done:**
 - Get a real solver-memory reading (a short `laserbeamFoam` run) before
   fixing `--memory`/`--cpus` for the actual runs.
