@@ -1,10 +1,13 @@
 # Claude Code instructions for this repo
 
-## When to read TESTRUNS.md
+## When to read TESTRUNS.md / TESTRUNS_MULTICOMPONENT.md
 
-**Always read [TESTRUNS.md](TESTRUNS.md) before doing any of the following:**
+**Always read [TESTRUNS.md](TESTRUNS.md) (single-material `laserbeamFoam`/`laserMeltFoam`) or
+[TESTRUNS_MULTICOMPONENT.md](TESTRUNS_MULTICOMPONENT.md) (`multicomponentLaserbeamFoam`,
+i.e. `tutorials/multiComponentlaserbeamFoam/` and `tutorials/compressiblelaserbeamFoam/`)
+before doing any of the following:**
 
-- Running a simulation (`laserbeamFoam`, `multicomponentLaserbeamFoam`, or `laserMeltFoam`) — exact Docker run command and required resource flags (`--shm-size`, `--ulimit`, `--ipc`, `--cpus`, `--memory`)
+- Running a simulation — exact Docker run command and required resource flags (`--shm-size`, `--ulimit`, `--ipc`, `--cpus`, `--memory`)
 - Pausing or resuming a run — procedure to signal a clean stop and restore controlDict
 - Reconstructing results for ParaView — order of `reconstructParMesh` then `reconstructPar`, and the commands
 - Loading results in ParaView — `.foam` marker file, `.pvsm` state file, VTK series file
@@ -16,12 +19,19 @@
 
 Running without the correct Docker flags causes silent failures or poor performance.
 
+Additionally, **always read [vdep_power_sweep.md](vdep_power_sweep.md)** before running, seeding,
+or discussing any of `testrun58`–`testrun67` (the active VDEP power-sweep pipeline) — it explains
+the seed→fork lineage and which core-count seed each fork must be copied from.
+
 ## Repo layout
 
 - `applications/solvers/` — three solvers: `laserbeamFoam`, `compressibleLaserbeamFoam`, `laserMeltFoam`
-- `tutorials/laserbeamFoam/vdep/` — active VDEP research cases (testrun30+); current baseline is **testrun35/36** (AlSi10Mg, 700 W, 6 m/s)
+- `tutorials/laserbeamFoam/vdep/` — active VDEP research cases (testrun30+). Current production
+  pipeline is the **testrun58–67 power sweep** (see [vdep_power_sweep.md](vdep_power_sweep.md));
+  testrun35/36 (AlSi10Mg, 700 W, 6 m/s) is the earlier single-case baseline, still referenced for
+  physical parameters below.
 - `tutorials/laserbeamFoam/plc/` — PLC reference cases (testrun1–29, 316L steel)
-- `tutorials/compressiblelaserbeamFoam/SS316L_Ti64_interface/` — multi-material case
+- `tutorials/compressiblelaserbeamFoam/SS316L_Ti64_interface/`, `tutorials/multiComponentlaserbeamFoam/` — multi-material cases (`multicomponentLaserbeamFoam` solver)
 
 ## Key facts
 
