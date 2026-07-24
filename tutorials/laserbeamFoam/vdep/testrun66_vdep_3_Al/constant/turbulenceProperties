@@ -1,7 +1,7 @@
 /*--------------------------------*- C++ -*----------------------------------*\
 | =========                 |                                                 |
 | \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
-|  \\    /   O peration     | Version:  2506                                  |
+|  \\    /   O peration     | Version:  v2506                                 |
 |   \\  /    A nd           | Website:  www.openfoam.com                      |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
@@ -10,19 +10,11 @@ FoamFile
     version     2.0;
     format      ascii;
     class       dictionary;
-    object      decomposeParDict;
+    object      turbulenceProperties;
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-numberOfSubdomains  32;
+simulationType  laminar;
 
-method  hierarchical;
-
-hierarchicalCoeffs
-{
-    n       (2 2 8);
-    delta   0.001;
-    order   yxz;
-}
 
 // ************************************************************************* //

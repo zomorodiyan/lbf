@@ -7,14 +7,28 @@
 export OMPI_ALLOW_RUN_AS_ROOT=1
 export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
 
-# Continuation stage: no initial->0 copy, no blockMesh, no setFields, no
-# decomposePar. This case must be seeded first by copying the previous
-# stage's final time directory (processor*/ dirs if parallel) into here;
-# startFrom latestTime in system/controlDict then resumes from it.
-
 NPROCS=$(foamDictionary -entry numberOfSubdomains -value system/decomposeParDict)
 
+runApplication blockMesh
+
+# Static refinement (2026-07-23, see report/jul23-tasks.md): union of two
+# boxes near the surface/track, refined to 5um via 3 passes of
+# topoSet + refineHexMesh. Not run via runApplication since that skips
+# re-running when a log of the same name already exists -- would only do
+# pass 1 across the loop otherwise.
+for i in 1 2 3
+do
+    topoSet -dict system/topoSetDict > log.topoSet.$i 2>&1
+    refineHexMesh boxToRefine -overwrite > log.refineHexMesh.$i 2>&1
+done
+
+echo "Copying 'initial' to 0"
+cp -r initial 0
+
+runApplication setFields
+
 if [ "$NPROCS" -gt 1 ]; then
+    runApplication decomposePar
     runParallel laserbeamFoam
 else
     runApplication laserbeamFoam

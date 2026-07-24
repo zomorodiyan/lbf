@@ -10,19 +10,26 @@ FoamFile
     version     2.0;
     format      ascii;
     class       dictionary;
-    object      decomposeParDict;
+    location    "system";
+    object      setFieldsDict;
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-numberOfSubdomains  32;
+defaultFieldValues
+(
+    volScalarFieldValue alpha.metal 0
+);
 
-method  hierarchical;
-
-hierarchicalCoeffs
-{
-    n       (2 2 8);
-    delta   0.001;
-    order   yxz;
-}
+regions
+(
+    boxToCell
+    {
+        box (-1 0.0002 -1) (1 0.0005 1);  // metal: y=0.2mm to 0.5mm; 0.2mm gas above
+        fieldValues
+        (
+            volScalarFieldValue alpha.metal 1
+        );
+    }
+);
 
 // ************************************************************************* //

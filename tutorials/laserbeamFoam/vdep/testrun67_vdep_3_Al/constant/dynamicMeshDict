@@ -1,0 +1,72 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2506                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      dynamicMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// 2026-07-23: mesh starts pre-refined via system/topoSetDict + refineHexMesh
+// (run in Allrun, 3 passes -> 5um in the static boxes). refineHexMesh shares
+// hexRef8 refinement bookkeeping (cellLevel/pointLevel) with
+// dynamicRefineFvMesh, so those cells are correctly seen as already at
+// maxRefinement and won't be re-refined past it; dynamicRefineFvMesh then
+// continues adaptively from that baseline using alpha.metal as before.
+//
+// Known open risk (see report/jul23-tasks.md): unrefineLevel only fires on
+// alpha.metal < 0.001 (pure gas), so gas-side cells in refine box 2 (surface
+// overflow) could get unrefined back down over the run since this field
+// doesn't know they're inside a "protected" static region. Not yet resolved
+// -- would need a combined static-region + alpha.metal trigger field.
+
+dynamicFvMesh   dynamicRefineFvMesh;
+
+// How often to refine
+refineInterval  5;
+
+// Field to be refinement on
+field           alpha.metal;
+
+// Refine field inbetween lower..upper
+lowerRefineLevel 0.001;
+upperRefineLevel 0.999;
+
+// If value < unrefineLevel unrefine
+unrefineLevel   0.001;
+
+// Have slower than 2:1 refinement
+nBufferLayers   3;
+
+// Refine cells only up to maxRefinement levels
+maxRefinement   3;
+
+// Stop refinement if maxCells reached
+maxCells        2500000;
+
+// Flux field and corresponding velocity field. Fluxes on changed
+// faces get recalculated by interpolating the velocity. Use 'none'
+// on surfaceScalarFields that do not need to be reinterpolated.
+correctFluxes
+(
+    (phi none)
+    (nHatf none)
+    (rhoPhi none)
+    (alphaPhi0.metal none)
+    (ghf none)
+    (alphaPhiUn none)
+    (rhophicp none)
+);
+
+// Write the refinement level as a volScalarField
+dumpLevel       true;
+
+
+// ************************************************************************* //
