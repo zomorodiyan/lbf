@@ -26,9 +26,11 @@ gas cells during early timesteps.
 enabling the full Morohoshi σ(T) model with sign-changing dσ/dT for sulphur/oxygen-bearing steels.
 
 ### VDEP absorptivity model — AlSi10Mg
-Tutorial cases `testrun30`–`testrun32` implement the velocity-dependent energy profile (VDEP)
-absorptivity model for AlSi10Mg bare-plate laser melting (1064 nm, keyhole regime).
-Material parameters: ρ=2670 kg/m³, Tliq=880 K, Tvap=2900 K, λ=1.064 µm.
+The velocity-dependent energy profile (VDEP) absorptivity model for AlSi10Mg bare-plate laser
+melting (1064 nm, keyhole regime) is implemented and exercised by the current power-sweep case set,
+`vdep/testrun58`–`testrun67` (see [vdep_power_sweep.md](vdep_power_sweep.md)). Earlier prototype
+cases (`testrun30`–`53`) have been removed; check git history from before this cleanup if you need
+their parameters.
 
 ### Research tutorial cases
 All research cases live under `tutorials/laserbeamFoam/`:
@@ -36,9 +38,7 @@ All research cases live under `tutorials/laserbeamFoam/`:
 | Directory | Material | Study |
 |---|---|---|
 | `plc/testrun1–29` | 316L stainless steel | PLC (power-law creep) baseline; surface tension parametric study |
-| `vdep/testrun30_vdep_1_Al` | AlSi10Mg | VDEP absorptivity, Tvap=2743 K |
-| `vdep/testrun31_vdep_2_Al` | AlSi10Mg | VDEP, Tvap=2900 K calibrated |
-| `vdep/testrun32_vdep_3_Al` | AlSi10Mg | VDEP, 500 W (handover baseline) |
+| `vdep/testrun58`–`67` | AlSi10Mg | VDEP power sweep (650–900 W); see [vdep_power_sweep.md](vdep_power_sweep.md) |
 
 See [SURFACE_TENSION_STUDY.md](SURFACE_TENSION_STUDY.md) for the 316L surface tension study notes.
 
@@ -46,6 +46,9 @@ See [SURFACE_TENSION_STUDY.md](SURFACE_TENSION_STUDY.md) for the 316L surface te
 - `tutorials/laserbeamFoam/laser.pvsm` — ParaView state for melt pool + laser ray visualization
 - `tutorials/laserbeamFoam/fix_vtk_series.py` — repairs `.vtk.series` files after paused/resumed runs
 - `reconstruct_results.sh` — Docker-based reconstruction with multi-case and `--latest` support
+- `results/lateral_xray.py`, `results/lateral_xray_liquid_solid.py` — synthetic lateral X-ray-style
+  melt pool projections for the VDEP power-sweep cases (headless pvpython, see TESTRUNS.md's
+  "Post-processing" section for the Docker image and invocation)
 
 ---
 

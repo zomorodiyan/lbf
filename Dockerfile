@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libvtk9-dev \
         libopenmpi-dev \
         openmpi-bin \
+        ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # ---- Build LIGGGHTS (optional – comment out this block if not needed) ------

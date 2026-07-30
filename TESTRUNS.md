@@ -79,8 +79,10 @@ This takes ~10–20 minutes the first time, ~2–5 minutes for subsequent rebuil
 
 ## Recommended starting case
 
-**`vdep/testrun35_vdep_3_Al`** — AlSi10Mg, 700 W effective, 6 m/s, 35 µm beam radius, 32 cores, 2-level AMR (→10 µm).
-**`vdep/testrun36_vdep_3_Al`** — same parameters, 3-level AMR (→5 µm), 25% longer track. Current active case.
+Current focus is the **VDEP power-sweep pipeline, testrun58–67** — see
+[vdep_power_sweep.md](vdep_power_sweep.md) for the seed→fork lineage and case table. The earlier
+single-case prototypes (testrun30–53) have been removed; check git history from before this cleanup
+if you need their parameters.
 
 ---
 
@@ -133,9 +135,16 @@ sed -i 's/stopAt.*writeNow;/stopAt          endTime;/' \
 
 ## Resume
 
-The Allrun script skips `decomposePar` if `processor0/` already exists, so just rerun the **Run** command above.
+**Always rename `log.laserbeamFoam` first** (e.g. `mv log.laserbeamFoam log.laserbeamFoam_stage1`),
+even for a plain resume with no other changes — `Allrun`'s `runParallel` guard refuses to rerun a
+stage if that log file already exists ("already run on ...: remove log file to re-run") and the
+container will exit in seconds having done nothing, which is easy to mistake for success since the
+exit code is still 0. This applies to *every* resume, not just multi-stage runs below. Once renamed,
+`Allrun` will skip `decomposePar` (since `processor0/` already exists) and go straight to
+`runParallel`, restarting from `latestTime` automatically — just rerun the **Run** command above.
 
-**Multi-stage runs** (e.g. testrun36, testrun43 — different write intervals or power profiles per stage):
+**Multi-stage runs** (different write intervals or power profiles per stage, e.g. testrun54's
+16→32-core switch):
 
 1. Set `endTime` and `writeInterval` in `system/controlDict` for stage 1 and run normally.
 2. When stage 1 finishes, **rename the log file** to preserve it:
@@ -146,10 +155,6 @@ The Allrun script skips `decomposePar` if `processor0/` already exists, so just 
 3. Update `endTime` and `writeInterval` (and any other parameters, e.g. `timeVsLaserPower`) for stage 2.
 4. Rerun the same **Run** command — OpenFOAM restarts from `latestTime` automatically, `decomposePar` is skipped because `processor0/` already exists.
 5. Repeat for further stages, incrementing the suffix (`_stage2`, `_stage3`, …).
-
-**Example — testrun43** (dense snapshots during violent startup, coarser after):
-- Stage 1: `endTime 1e-5`, `writeInterval 1e-6` (0–10 µs, every 1 µs)
-- Stage 2: `endTime 1e-4`, `writeInterval 4e-6` (10–100 µs, every 4 µs)
 
 ---
 
@@ -234,7 +239,10 @@ before running, pausing, or reconstructing any case that uses that solver.
 
 ## Making videos from ParaView PNG exports
 
-ParaView exports image sequences as `name.0000.png`, `name.0001.png`, etc. Use `ffmpeg` to combine them into an mp4.
+`ffmpeg` is bundled in the `lbf3` image (added so no separate host install is needed) — run it via
+`docker run --rm -v $(pwd):/workspace lbf3 bash -lc "ffmpeg ..."` from the repo root, same as any
+other `lbf3` command. ParaView exports image sequences as `name.0000.png`, `name.0001.png`, etc.
+Use `ffmpeg` to combine them into an mp4.
 
 **Single view (e.g. top view only):**
 ```bash
@@ -266,6 +274,47 @@ Notes:
 - `-crf 18` gives high quality; increase to 23–28 for smaller files.
 - If frames have different resolutions, add `-vf scale=WIDTH:HEIGHT` before the output to normalise.
 - Output is at `\\wsl$\Ubuntu\home\mzomoro1\bin\lbf3\...` when browsing from Windows.
+
+---
+
+## Post-processing: synthetic lateral X-ray view (`results/lateral_xray*.py`)
+
+These scripts render a synthetic through-thickness X-ray-style projection of the melt pool for the
+VDEP power-sweep cases. They run in a **different Docker image than everything else on this
+page** — `kitware/paraview:pv-v5.8.0-osmesa-py3` (headless ParaView/pvpython, OSMesa, no GUI), not
+`lbf3`. Pull it with `docker pull kitware/paraview:pv-v5.8.0-osmesa-py3` (or it auto-pulls on first
+use, given internet access).
+
+**Render one timestep:**
+```bash
+docker run --rm -e PYTHONUNBUFFERED=1 -v $(pwd):/workspace \
+  --entrypoint /opt/paraview/bin/pvpython \
+  kitware/paraview:pv-v5.8.0-osmesa-py3 \
+  /workspace/results/lateral_xray_liquid_solid.py \
+  /workspace/tutorials/laserbeamFoam/vdep/CASE/CASE.foam <time> /workspace/results/out.png
+```
+`lateral_xray.py` (gas/metal only) takes the same arguments. `lateral_xray_liquid_solid.py`
+additionally draws two dotted boundary lines (vapor-depression bottom in white, melt-pool bottom in
+sky blue), derived from a continuous attenuation-ceiling threshold rather than a boolean presence
+flag — see the script's own header comment for why that distinction matters (a boolean flag is
+fragile against isolated mesh-triangle artifacts; a continuous threshold on an averaged value isn't).
+
+**Batch-render every available timestep + build an animation:** see
+`results/_render_ls_all_and_video.sh` for the working pattern. Key points if you write a similar
+script:
+- Get the timestep list with `find CASE -maxdepth 1 -type d -regex ".*/[0-9.e-]+" | xargs -n1
+  basename | sort -g` (numeric sort, not alphabetical — filenames mix scientific notation for early
+  small timesteps with decimal notation for later ones, which sort wrong alphabetically).
+- Build the ffmpeg input as an explicit **concat demuxer list** (`file '...'` / `duration ...` lines
+  in the same numerically-sorted order), not a `%04d` pattern — these timestep-named files aren't
+  sequentially numbered. Repeat the last file once more without a `duration` line (a concat demuxer
+  quirk: the final entry's duration is otherwise ignored).
+- Run `ffmpeg` via the `lbf3` image (it's bundled there), not the paraview image.
+- **Write multi-step bash logic (loops, arrays, variables) to a `.sh` file and run that file**,
+  rather than passing an inline multi-line script with variables through `wsl.exe -d Ubuntu -- bash
+  -lc '...'` from a Windows-side shell — variable expansion silently breaks somewhere in that
+  quoting chain (confirmed: `wsl.exe -d Ubuntu -- bash -lc 'X=1; echo $X'` printed nothing instead
+  of `1`). A script file sidesteps the whole problem.
 
 ---
 
