@@ -39,14 +39,26 @@ effort.
   (32-core), each running 0→100µs (1000W warmup, then 650W stabilization)
 - [x] Seed→fork mesh/field hand-off procedure tested end-to-end
   (testrun58→testrun59) — see vdep_power_sweep.md's "Hand-off validated" note
-- [x] testrun62 (650W) and testrun63 (700W) forked and running
-- [ ] testrun64 (750W), testrun66 (850W) — Mehrdad, on the 32-core workstation
-- [ ] testrun65 (800W), testrun67 (900W) — Zixun, on his own 32-core machine
 - [ ] Reconstruct and post-process all six forks once complete
 - [ ] Extract keyhole depth vs. power and compare to experiment
 
-Check with whoever owns a given fork for its current run status — this file
-doesn't track live progress on machines other than the one it's edited from.
+### Fork status (as of 2026-07-31)
+
+| Case | Power | Owner | Progress | Notes |
+|---|---|---|---|---|
+| testrun62 | 650 W | Mehrdad | 80% (t≈340µs) | running |
+| testrun63 | 700 W | Mehrdad | 0% | forked, not yet started |
+| testrun64 | 750 W | Mehrdad | 100% (t=400µs) | complete |
+| testrun66 | 850 W | Mehrdad | 15% (t≈145µs) | running |
+| testrun65 | 800 W | Zixun | 73% (t≈320µs) | running, latest frame reconstructed |
+| testrun67 | 900 W | Zixun | 60% (t≈280µs) | running, latest frame reconstructed |
+
+Zixun is relocating and packing up his PC, so his animation rendering for
+testrun65/67 may be delayed until he's set back up — reconstructed data is
+ready whenever he (or anyone else) gets to it.
+
+Check with whoever owns a given fork for anything more recent than this table
+— it's a snapshot from the messages above, not a live status.
 
 ---
 
