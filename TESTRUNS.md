@@ -277,39 +277,53 @@ Notes:
 
 ---
 
-## Post-processing: synthetic lateral X-ray view (`results/lateral_xray*.py`)
+## Post-processing: synthetic X-ray + normal-render views (`results/*.py`)
 
-These scripts render a synthetic through-thickness X-ray-style projection of the melt pool for the
-VDEP power-sweep cases. They run in a **different Docker image than everything else on this
-page** — `kitware/paraview:pv-v5.8.0-osmesa-py3` (headless ParaView/pvpython, OSMesa, no GUI), not
-`lbf3`. Pull it with `docker pull kitware/paraview:pv-v5.8.0-osmesa-py3` (or it auto-pulls on first
-use, given internet access).
+Three scripts render different views of the melt pool for the VDEP power-sweep cases. They run in a
+**different Docker image than everything else on this page** —
+`kitware/paraview:pv-v5.8.0-osmesa-py3` (headless ParaView/pvpython, OSMesa, no GUI), not `lbf3`.
+Pull it with `docker pull kitware/paraview:pv-v5.8.0-osmesa-py3` (or it auto-pulls on first use,
+given internet access).
 
-**Render one timestep:**
+- `lateral_xray.py` — synthetic through-thickness X-ray-style attenuation projection
+  (lateral view), with a dotted melt-pool-bottom boundary line derived from a continuous
+  attenuation-ceiling threshold rather than a boolean presence flag — see the script's own header
+  comment for why that distinction matters (a boolean flag is fragile against isolated
+  mesh-triangle artifacts; a continuous threshold on an averaged value isn't).
+- `lateral_screenshot.py` — a normal (not ray-traced) ParaView surface render of the same lateral
+  view, colored by lateral (x) position rather than a physical field, since that's otherwise the
+  one direction an orthographic profile view can't show.
+- `top_screenshot.py` — same normal-render technique, viewed top-down instead, colored by height
+  relative to the nominal surface.
+
+All three take the same CLI arguments:
 ```bash
 docker run --rm -e PYTHONUNBUFFERED=1 -v $(pwd):/workspace \
   --entrypoint /opt/paraview/bin/pvpython \
   kitware/paraview:pv-v5.8.0-osmesa-py3 \
-  /workspace/results/lateral_xray_liquid_solid.py \
+  /workspace/results/lateral_xray.py \
   /workspace/tutorials/laserbeamFoam/vdep/CASE/CASE.foam <time> /workspace/results/out.png
 ```
-`lateral_xray.py` (gas/metal only) takes the same arguments. `lateral_xray_liquid_solid.py`
-additionally draws two dotted boundary lines (vapor-depression bottom in white, melt-pool bottom in
-sky blue), derived from a continuous attenuation-ceiling threshold rather than a boolean presence
-flag — see the script's own header comment for why that distinction matters (a boolean flag is
-fragile against isolated mesh-triangle artifacts; a continuous threshold on an averaged value isn't).
 
-**Batch-render every available timestep + build an animation:** see
-`results/_render_ls_all_and_video.sh` for the working pattern. Key points if you write a similar
-script:
+**Batch-render every available timestep, stack all three views into one image per timestep, and
+build an mp4:**
+```bash
+bash results/_render_stacked_video.sh 65   # or a full case dir name, e.g. testrun65_vdep_3_Al
+```
+Works for any reconstructed VDEP power-sweep case, not just testrun64 — it auto-creates a `.foam`
+marker if the case doesn't have one yet, and errors out clearly if the case hasn't been
+reconstructed (no timestep directories found directly under it). Key points, if you ever write a
+similar script from scratch:
 - Get the timestep list with `find CASE -maxdepth 1 -type d -regex ".*/[0-9.e-]+" | xargs -n1
   basename | sort -g` (numeric sort, not alphabetical — filenames mix scientific notation for early
   small timesteps with decimal notation for later ones, which sort wrong alphabetically).
-- Build the ffmpeg input as an explicit **concat demuxer list** (`file '...'` / `duration ...` lines
-  in the same numerically-sorted order), not a `%04d` pattern — these timestep-named files aren't
-  sequentially numbered. Repeat the last file once more without a `duration` line (a concat demuxer
-  quirk: the final entry's duration is otherwise ignored).
-- Run `ffmpeg` via the `lbf3` image (it's bundled there), not the paraview image.
+- Stack the three per-timestep PNGs with ffmpeg: scale each to the widest of the three (so nothing
+  gets needlessly upscaled) via `scale=W:-2`, then `vstack=inputs=3`.
+- Build the ffmpeg video input as an explicit **concat demuxer list** (`file '...'` / `duration ...`
+  lines in the same numerically-sorted order), not a `%04d` pattern — these timestep-named files
+  aren't sequentially numbered. Repeat the last file once more without a `duration` line (a concat
+  demuxer quirk: the final entry's duration is otherwise ignored).
+- Run `ffmpeg`/`ffprobe` via the `lbf3` image (bundled there), not the paraview image.
 - **Write multi-step bash logic (loops, arrays, variables) to a `.sh` file and run that file**,
   rather than passing an inline multi-line script with variables through `wsl.exe -d Ubuntu -- bash
   -lc '...'` from a Windows-side shell — variable expansion silently breaks somewhere in that
