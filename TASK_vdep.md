@@ -53,10 +53,6 @@ effort.
 | testrun65 | 800 W | Zixun | 73% (t≈320µs) | running, latest frame reconstructed |
 | testrun67 | 900 W | Zixun | 60% (t≈280µs) | running, latest frame reconstructed |
 
-Zixun is relocating and packing up his PC, so his animation rendering for
-testrun65/67 may be delayed until he's set back up — reconstructed data is
-ready whenever he (or anyone else) gets to it.
-
 Check with whoever owns a given fork for anything more recent than this table
 — it's a snapshot from the messages above, not a live status.
 
