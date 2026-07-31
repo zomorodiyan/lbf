@@ -1,41 +1,52 @@
 #!/bin/bash
 # Generic version of _render_stacked.sh: instead of 5 hand-picked sample
 # timesteps for testrun64, this renders *every* reconstructed timestep of
-# a given testrun and assembles the stacked images into an mp4. Works for
-# any VDEP power-sweep case (testrun62-67, ...) once it's been reconstructed
-# (reconstructParMesh + reconstructPar) and has some timestep directories
-# directly under the case folder.
+# a given case and assembles the stacked images into an mp4. Works for any
+# reconstructed OpenFOAM case (not just the VDEP power-sweep cases) once it's
+# been reconstructed (reconstructParMesh + reconstructPar) and has some
+# timestep directories directly under the case folder.
 #
 # Usage:
-#   bash results/_render_stacked_video.sh <testrun>
-#     <testrun> is either a bare number (e.g. "64", expanded to
-#     testrun64_vdep_3_Al) or a full case directory name
-#     (e.g. testrun65_vdep_3_Al).
+#   bash results/_render_stacked_video.sh <case>
+#     <case> is one of:
+#       - a bare number (e.g. "64"), expanded to
+#         tutorials/laserbeamFoam/vdep/testrun64_vdep_3_Al -- shorthand for the
+#         VDEP power-sweep cases only
+#       - a bare case directory name (e.g. "testrun65_vdep_3_Al"), also
+#         resolved under tutorials/laserbeamFoam/vdep/
+#       - a path (contains a "/", relative to repo root or absolute) to any
+#         other reconstructed case, e.g.
+#         tutorials/laserbeamFoam/plc/testrun12_1_SS316L or
+#         /workspace/tutorials/compressiblelaserbeamFoam/SS316L_Ti64_interface
 #
-# Output:
+# Output (written to results/, prefix = the case directory's basename, e.g.
+# "testrun65_vdep_3_Al" or "testrun12_1_SS316L" -- not shortened, so cases
+# from different directories never collide):
 #   results/<prefix>_top_screenshot_t<time>.png       (one per timestep)
 #   results/<prefix>_lateral_screenshot_t<time>.png    (one per timestep)
 #   results/<prefix>_lateral_xray_t<time>.png           (one per timestep)
 #   results/<prefix>_stacked_t<time>.png               (one per timestep)
 #   results/<prefix>_stacked_video.mp4
-#   where <prefix> is the testrun name, e.g. "testrun65".
 set -euo pipefail
 cd ~/lbf3
 
 if [ $# -lt 1 ]; then
-  echo "Usage: bash results/_render_stacked_video.sh <testrun>  (e.g. 64 or testrun64_vdep_3_Al)"
+  echo "Usage: bash results/_render_stacked_video.sh <case>"
+  echo "  <case> is a bare number (64), a bare VDEP case dir name (testrun64_vdep_3_Al),"
+  echo "  or a path to any other reconstructed case (tutorials/laserbeamFoam/plc/CASE)."
   exit 1
 fi
 
 ARG="$1"
 if [[ "$ARG" =~ ^[0-9]+$ ]]; then
-  CASE_DIR="testrun${ARG}_vdep_3_Al"
+  CASE="tutorials/laserbeamFoam/vdep/testrun${ARG}_vdep_3_Al"
+elif [[ "$ARG" == */* ]]; then
+  CASE="${ARG%/}"  # strip a trailing slash, if any
 else
-  CASE_DIR="$ARG"
+  CASE="tutorials/laserbeamFoam/vdep/${ARG}"
 fi
-PREFIX="${CASE_DIR%%_*}"  # e.g. "testrun65" from "testrun65_vdep_3_Al"
+PREFIX="$(basename "$CASE")"  # e.g. "testrun65_vdep_3_Al" or "testrun12_1_SS316L"
 
-CASE="tutorials/laserbeamFoam/vdep/${CASE_DIR}"
 if [ ! -d "$CASE" ]; then
   echo "ERROR: case directory not found: $CASE"
   exit 1
@@ -47,7 +58,7 @@ if [ "${#TIMES[@]}" -eq 0 ]; then
   echo "  (run reconstructParMesh then reconstructPar first -- see TESTRUNS.md)"
   exit 1
 fi
-echo "Found ${#TIMES[@]} timesteps for $CASE_DIR"
+echo "Found ${#TIMES[@]} timesteps for $CASE"
 
 FOAM_FILE=$(find "$CASE" -maxdepth 1 -name '*.foam' | head -1 || true)
 if [ -z "$FOAM_FILE" ]; then
@@ -67,22 +78,22 @@ for t in "${TIMES[@]}"; do
 
   echo "[$i/${#TIMES[@]}] t=$t"
 
-  docker run --rm -e PYTHONUNBUFFERED=1 -v "$(pwd)":/workspace --entrypoint /opt/paraview/bin/pvpython \
+  docker run --rm --user "$(id -u):$(id -g)" -e PYTHONUNBUFFERED=1 -v "$(pwd)":/workspace --entrypoint /opt/paraview/bin/pvpython \
     kitware/paraview:pv-v5.8.0-osmesa-py3 \
     /workspace/results/top_screenshot.py "/workspace/$FOAM_FILE" "$t" "/workspace/$top_png" \
     > /tmp/stackvid_top_${PREFIX}_${t}.log 2>&1 || { echo "  top view FAILED (see /tmp/stackvid_top_${PREFIX}_${t}.log)"; continue; }
 
-  docker run --rm -e PYTHONUNBUFFERED=1 -v "$(pwd)":/workspace --entrypoint /opt/paraview/bin/pvpython \
+  docker run --rm --user "$(id -u):$(id -g)" -e PYTHONUNBUFFERED=1 -v "$(pwd)":/workspace --entrypoint /opt/paraview/bin/pvpython \
     kitware/paraview:pv-v5.8.0-osmesa-py3 \
     /workspace/results/lateral_screenshot.py "/workspace/$FOAM_FILE" "$t" "/workspace/$lat_png" \
     > /tmp/stackvid_lat_${PREFIX}_${t}.log 2>&1 || { echo "  lateral screenshot FAILED (see /tmp/stackvid_lat_${PREFIX}_${t}.log)"; continue; }
 
-  docker run --rm -e PYTHONUNBUFFERED=1 -v "$(pwd)":/workspace --entrypoint /opt/paraview/bin/pvpython \
+  docker run --rm --user "$(id -u):$(id -g)" -e PYTHONUNBUFFERED=1 -v "$(pwd)":/workspace --entrypoint /opt/paraview/bin/pvpython \
     kitware/paraview:pv-v5.8.0-osmesa-py3 \
     /workspace/results/lateral_xray.py "/workspace/$FOAM_FILE" "$t" "/workspace/$xray_png" \
     > /tmp/stackvid_xray_${PREFIX}_${t}.log 2>&1 || { echo "  lateral X-ray FAILED (see /tmp/stackvid_xray_${PREFIX}_${t}.log)"; continue; }
 
-  docker run --rm -v "$(pwd)":/workspace lbf3 bash -lc "
+  docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd)":/workspace lbf3 bash -lc "
     set -e
     W=\$(for f in /workspace/$top_png /workspace/$lat_png /workspace/$xray_png; do
       ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 \"\$f\"
@@ -116,7 +127,7 @@ LAST_LINE=$(tail -2 "$CONCAT_LIST" | head -1)
 echo "$LAST_LINE" >> "$CONCAT_LIST"
 
 VIDEO_OUT="results/${PREFIX}_stacked_video.mp4"
-docker run --rm -v "$(pwd)":/workspace lbf3 bash -lc \
+docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd)":/workspace lbf3 bash -lc \
   "ffmpeg -y -f concat -safe 0 -i /workspace/$CONCAT_LIST -vsync vfr -pix_fmt yuv420p -c:v libx264 -crf 18 /workspace/$VIDEO_OUT"
 
 echo "VIDEO DONE: $VIDEO_OUT"

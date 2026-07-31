@@ -240,9 +240,12 @@ before running, pausing, or reconstructing any case that uses that solver.
 ## Making videos from ParaView PNG exports
 
 `ffmpeg` is bundled in the `lbf3` image (added so no separate host install is needed) — run it via
-`docker run --rm -v $(pwd):/workspace lbf3 bash -lc "ffmpeg ..."` from the repo root, same as any
-other `lbf3` command. ParaView exports image sequences as `name.0000.png`, `name.0001.png`, etc.
-Use `ffmpeg` to combine them into an mp4.
+`docker run --rm --user "$(id -u):$(id -g)" -v $(pwd):/workspace lbf3 bash -lc "ffmpeg ..."` from
+the repo root, same as any other `lbf3` command. The `--user` flag matters here even though `lbf3`
+is normally run as root for simulations: without it, the output mp4 comes out root-owned (same
+underlying issue as the [Permissions](#permissions-across-both-docker-images) note below), which is
+usually undesirable for something you just want to open in a video player. ParaView exports image
+sequences as `name.0000.png`, `name.0001.png`, etc. Use `ffmpeg` to combine them into an mp4.
 
 **Single view (e.g. top view only):**
 ```bash
@@ -296,9 +299,13 @@ given internet access).
 - `top_screenshot.py` — same normal-render technique, viewed top-down instead, colored by height
   relative to the nominal surface.
 
+See [Permissions across both Docker images](#permissions-across-both-docker-images) below before
+running any of these — the short version is: always add `--user "$(id -u):$(id -g)"` to
+`kitware/paraview` commands, or they fail at the very last step after doing all the actual work.
+
 All three take the same CLI arguments:
 ```bash
-docker run --rm -e PYTHONUNBUFFERED=1 -v $(pwd):/workspace \
+docker run --rm --user "$(id -u):$(id -g)" -e PYTHONUNBUFFERED=1 -v $(pwd):/workspace \
   --entrypoint /opt/paraview/bin/pvpython \
   kitware/paraview:pv-v5.8.0-osmesa-py3 \
   /workspace/results/lateral_xray.py \
@@ -308,12 +315,19 @@ docker run --rm -e PYTHONUNBUFFERED=1 -v $(pwd):/workspace \
 **Batch-render every available timestep, stack all three views into one image per timestep, and
 build an mp4:**
 ```bash
-bash results/_render_stacked_video.sh 65   # or a full case dir name, e.g. testrun65_vdep_3_Al
+bash results/_render_stacked_video.sh 65
+# or a bare VDEP case dir name:
+bash results/_render_stacked_video.sh testrun65_vdep_3_Al
+# or a path to any other reconstructed case, anywhere in the repo:
+bash results/_render_stacked_video.sh tutorials/laserbeamFoam/plc/testrun12_1_SS316L
 ```
-Works for any reconstructed VDEP power-sweep case, not just testrun64 — it auto-creates a `.foam`
-marker if the case doesn't have one yet, and errors out clearly if the case hasn't been
-reconstructed (no timestep directories found directly under it). Key points, if you ever write a
-similar script from scratch:
+Works for any reconstructed case, not just the VDEP power-sweep ones — the bare-number/bare-name
+forms are shorthand for `tutorials/laserbeamFoam/vdep/CASE`; anything containing a `/` is used as a
+literal path instead. Output filenames are prefixed with the case directory's basename (not
+shortened), so cases from different directories never collide. It auto-creates a `.foam` marker if
+the case doesn't have one yet, and errors out clearly if the case hasn't been reconstructed (no
+timestep directories found directly under it). Key points, if you ever write a similar script from
+scratch:
 - Get the timestep list with `find CASE -maxdepth 1 -type d -regex ".*/[0-9.e-]+" | xargs -n1
   basename | sort -g` (numeric sort, not alphabetical — filenames mix scientific notation for early
   small timesteps with decimal notation for later ones, which sort wrong alphabetically).
@@ -329,6 +343,43 @@ similar script from scratch:
   -lc '...'` from a Windows-side shell — variable expansion silently breaks somewhere in that
   quoting chain (confirmed: `wsl.exe -d Ubuntu -- bash -lc 'X=1; echo $X'` printed nothing instead
   of `1`). A script file sidesteps the whole problem.
+
+---
+
+## Permissions across both Docker images
+
+The two images have different user models, and mixing them up without accounting for that is the
+single most common source of confusing failures in this workflow — recognize the symptom, then
+apply the matching fix:
+
+- **`lbf3` runs as root.** Anything it writes — `processor*/` dirs, reconstructed timestep
+  directories, `log.*` files, and any ad-hoc command like `ffmpeg` that you run through it without
+  extra flags — comes out **root-owned** on the host. This is usually harmless until you try to do
+  something as your normal user with that output: deleting it (already covered under
+  [Clean up processor directories](#clean-up-processor-directories)), editing it, or even just
+  opening a generated video/image in a sandboxed app (e.g. a snap-packaged media player) that's
+  stricter about ownership than a plain permission-bits check — that can fail with
+  `Permission denied` even though the file's mode nominally allows "other" read.
+  - If the command genuinely needs root (simulation runs, `decomposePar`, `reconstructParMesh`/
+    `reconstructPar`) — this is unavoidable; fix ownership afterward:
+    ```bash
+    sudo chown -R "$(id -u):$(id -g)" <path>
+    ```
+  - If the command doesn't need root (e.g. `ffmpeg`, `ffprobe`) — avoid the problem entirely by
+    adding `--user "$(id -u):$(id -g)"` to that `docker run` instead of chowning after the fact.
+    `results/_render_stacked_video.sh` and the `ffmpeg` command in
+    [Making videos from ParaView PNG exports](#making-videos-from-paraview-png-exports) both do
+    this already.
+
+- **`kitware/paraview:pv-v5.8.0-osmesa-py3` runs as a non-root user** (`pv-user`, uid 1000). If that
+  doesn't match your host uid, the container reads the case files fine but fails at the *very last
+  step* (`fig.savefig` in the Python scripts, or `vtkPNGWriter`/matplotlib inside
+  `top_screenshot.py`) with `PermissionError: [Errno 13] Permission denied` (or a VTK
+  `Unable to open file` / `Ran out of disk space` error, which is just VTK's generic wording for the
+  same underlying write failure) when writing into the host-owned `results/` directory — **after**
+  doing all the actual rendering work, which is easy to mistake for a rendering bug instead of a
+  permissions one. Fix: add `--user "$(id -u):$(id -g)"`, as already shown in every example on this
+  page that uses this image.
 
 ---
 
