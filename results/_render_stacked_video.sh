@@ -13,10 +13,11 @@
 #     (e.g. testrun65_vdep_3_Al).
 #
 # Output:
-#   results/<prefix>_top_screenshot_t<time>.png       (one per timestep)
-#   results/<prefix>_lateral_screenshot_t<time>.png    (one per timestep)
+#   results/<prefix>_top_screenshot_t<time>.png         (one per timestep)
+#   results/<prefix>_lateral_screenshot_t<time>.png     (one per timestep)
 #   results/<prefix>_lateral_xray_t<time>.png           (one per timestep)
-#   results/<prefix>_stacked_t<time>.png               (one per timestep)
+#   results/<prefix>_transverse_screenshot_t<time>.png  (one per timestep)
+#   results/<prefix>_stacked_t<time>.png                (one per timestep)
 #   results/<prefix>_stacked_video.mp4
 #   where <prefix> is the testrun name, e.g. "testrun65".
 set -euo pipefail
@@ -63,6 +64,7 @@ for t in "${TIMES[@]}"; do
   top_png="results/${PREFIX}_top_screenshot_t${t}.png"
   lat_png="results/${PREFIX}_lateral_screenshot_t${t}.png"
   xray_png="results/${PREFIX}_lateral_xray_t${t}.png"
+  trans_png="results/${PREFIX}_transverse_screenshot_t${t}.png"
   stacked_png="results/${PREFIX}_stacked_t${t}.png"
 
   echo "[$i/${#TIMES[@]}] t=$t"
@@ -82,16 +84,22 @@ for t in "${TIMES[@]}"; do
     /workspace/results/lateral_xray.py "/workspace/$FOAM_FILE" "$t" "/workspace/$xray_png" \
     > /tmp/stackvid_xray_${PREFIX}_${t}.log 2>&1 || { echo "  lateral X-ray FAILED (see /tmp/stackvid_xray_${PREFIX}_${t}.log)"; continue; }
 
+  docker run --rm -e PYTHONUNBUFFERED=1 -v "$(pwd)":/workspace --entrypoint /opt/paraview/bin/pvpython \
+    kitware/paraview:pv-v5.8.0-osmesa-py3 \
+    /workspace/results/transverse_screenshot.py "/workspace/$FOAM_FILE" "$t" "/workspace/$trans_png" \
+    > /tmp/stackvid_trans_${PREFIX}_${t}.log 2>&1 || { echo "  transverse view FAILED (see /tmp/stackvid_trans_${PREFIX}_${t}.log)"; continue; }
+
   docker run --rm -v "$(pwd)":/workspace lbf3 bash -lc "
     set -e
-    W=\$(for f in /workspace/$top_png /workspace/$lat_png /workspace/$xray_png; do
+    W=\$(for f in /workspace/$top_png /workspace/$lat_png /workspace/$xray_png /workspace/$trans_png; do
       ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 \"\$f\"
     done | sort -n | tail -1)
     ffmpeg -y \
       -i /workspace/$top_png \
       -i /workspace/$lat_png \
       -i /workspace/$xray_png \
-      -filter_complex \"[0:v]scale=\${W}:-2[v0];[1:v]scale=\${W}:-2[v1];[2:v]scale=\${W}:-2[v2];[v0][v1][v2]vstack=inputs=3\" \
+      -i /workspace/$trans_png \
+      -filter_complex \"[0:v]scale=\${W}:-2[v0];[1:v]scale=\${W}:-2[v1];[2:v]scale=\${W}:-2[v2];[3:v]scale=\${W}:-2[v3];[v0][v1][v2][v3]vstack=inputs=4\" \
       /workspace/$stacked_png -loglevel error
   " > /tmp/stackvid_stack_${PREFIX}_${t}.log 2>&1 || { echo "  stacking FAILED (see /tmp/stackvid_stack_${PREFIX}_${t}.log)"; continue; }
 done
