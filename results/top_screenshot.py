@@ -12,6 +12,20 @@
 # vapor-depression keyhole, both otherwise flattened to the same silhouette
 # from directly overhead.
 #
+# Transverse cut markers: also draws 3 colored vertical lines (constant z,
+# full lateral width), one per transverse_screenshot.py panel offset --
+# z = laser_z - offset, same OFFSETS_BEHIND_LASER/GM_RIM_COLORS values as
+# that script (red/orange/yellow, largest-offset-behind-laser first), so this
+# view shows exactly where each of that script's cross-section cuts is being
+# taken relative to the melt track, tracking the laser as it advances frame
+# to frame. In screen space here z is the horizontal axis (see camera
+# comment below), so a constant-z cut renders as a vertical line, unlike
+# transverse_screenshot.py's own rim outlines (which are the boundary curve
+# *at* that cut, not a marker for its location). Drawn as a Line source at
+# y just above ymin (nearer the camera than any real geometry, see
+# start-of-scene comment on the camera), so it's never occluded by spatter or
+# the plume and reads as a clean overlay rather than real 3D geometry.
+#
 # Cropping/framing follows the same reasoning as lateral_screenshot.py (see
 # that file for the fuller history): the z-window spans the *entire* scan,
 # start to finish, identically for every frame in a batch, so frames stay
@@ -66,6 +80,22 @@ VIEW_HEIGHT_PX = 500                 # output image height; width is set to
                                       # exactly match the crop window's own
                                       # z/x aspect ratio, so there's no
                                       # letterboxing
+OFFSETS_BEHIND_LASER = [0.7e-3, 0.6e-3, 0.5e-3]  # meters behind the laser --
+                                                   # must match
+                                                   # transverse_screenshot.py's
+                                                   # own OFFSETS_BEHIND_LASER
+                                                   # exactly, so the marker
+                                                   # lines drawn here
+                                                   # correspond to that
+                                                   # script's actual cut
+                                                   # panels
+GM_RIM_COLORS = [                    # one flat color per offset, must match
+    [1.0, 0.0, 0.0],                 # transverse_screenshot.py's own
+    [1.0, 0.5, 0.0],                 # GM_RIM_COLORS -- red, orange, yellow,
+    [1.0, 1.0, 0.0],                 # indexed in OFFSETS_BEHIND_LASER order
+]
+GM_RIM_LINE_WIDTH = 3.0              # wireframe line width (px) for the
+                                      # marker lines
 # ─────────────────────────────────────────────────────────────────
 
 if len(sys.argv) not in (4, 5):
@@ -87,6 +117,19 @@ def _load_laser_time_vs_position(case_dir):
     )
     table = sorted((float(t), float(x), float(y), float(z)) for t, x, y, z in entries)
     return table
+
+
+def _laser_z_at(table, t):
+    """Piecewise-linear interpolation of the laser's z position at time t."""
+    if t <= table[0][0]:
+        return table[0][3]
+    if t >= table[-1][0]:
+        return table[-1][3]
+    for (t0, _, _, z0), (t1, _, _, z1) in zip(table[:-1], table[1:]):
+        if t0 <= t <= t1:
+            frac = (t - t0) / (t1 - t0)
+            return z0 + frac * (z1 - z0)
+    return table[-1][3]
 
 
 reader = OpenFOAMReader(FileName=foam_file)
@@ -111,6 +154,9 @@ z_window_max = scan_end_z + MELT_FRONT_OFFSET + CROP_PADDING
 log(f"Scan z range=[{scan_start_z*1e3:.3f},{scan_end_z*1e3:.3f}]mm; "
     f"fixed crop window: x=[{X_LATERAL_MIN*1e3:.3f},{X_LATERAL_MAX*1e3:.3f}]mm "
     f"z=[{z_window_min*1e3:.3f},{z_window_max*1e3:.3f}]mm (y uncropped)")
+
+laser_z = _laser_z_at(laser_table, time_value)
+log(f"Laser z={laser_z*1e3:.3f}mm at t={time_value}")
 
 gm_contour = Contour(Input=merged)
 gm_contour.ContourBy = ['POINTS', FIELD_GM]
@@ -162,7 +208,6 @@ view.ViewTime = time_value  # the view has its own time state, independent of
 disp = Show(ycolor, view)
 disp.Representation = 'Surface'
 ColorBy(disp, ('POINTS', FIELD_COLOR))
-disp.SetScalarBarVisibility(view, True)
 ctf = GetColorTransferFunction(FIELD_COLOR)
 # Custom diverging map, sharply transitioning at y=surface (0 after the
 # offset above), rather than a smooth preset -- see lateral_screenshot.py
@@ -177,21 +222,30 @@ ctf.RGBPoints = [
     transition,  1.0, 0.0, 0.0,
     ymax_off,    1.0, 0.0, 0.0,
 ]
-colorbar = GetScalarBar(ctf, view)
-colorbar.Title = 'y (um)'
-colorbar.TitleColor = [0, 0, 0]
-colorbar.LabelColor = [0, 0, 0]
-colorbar.TitleBold = 1
-colorbar.LabelBold = 1
-colorbar.Orientation = 'Horizontal'
-colorbar.TitleFontSize = round(colorbar.TitleFontSize * 3 * 0.5 * 0.5 * 2)
-colorbar.LabelFontSize = round(colorbar.LabelFontSize * 3 * 0.5 * 0.5 * 2)
-colorbar.WindowLocation = 'LowerCenter'
-colorbar.ScalarBarLength = 0.25  # kept narrow -- see lateral_screenshot.py
-colorbar.UseCustomLabels = 1
-colorbar.CustomLabels = [-100.0, 0.0, 100.0]
-colorbar.AddRangeLabels = 0  # otherwise the actual data min/max get added
-                              # as extra labels alongside the custom ones
+# No colorbar overlay here -- see the separate-colorbar block below, which
+# writes it to its own file instead (task.md: "Separate colorbars from the
+# images").
+
+# Transverse cut markers (see header): one Line source per offset, at
+# y = ymin - margin so it's nearer the camera than any real geometry (see
+# camera comment below for why smaller y is nearer) and therefore never
+# occluded. Not real 3D geometry tied to the surface -- a screen-space
+# location marker, hence the flat-color/no-scalar-bar treatment (same
+# ColorArrayName=['POINTS',''] pattern transverse_screenshot.py uses for its
+# own flat-colored rim outlines, avoiding the ColorBy(rep, None) crash noted
+# there when there's no array to default to).
+y_marker = ymin - 0.02 * (ymax - ymin)
+for _offset_idx, _offset in enumerate(OFFSETS_BEHIND_LASER):
+    _z_cut = laser_z - _offset
+    _marker = Line(Point1=[X_LATERAL_MIN, y_marker, _z_cut], Point2=[X_LATERAL_MAX, y_marker, _z_cut])
+    _marker_disp = Show(_marker, view)
+    _marker_disp.Representation = 'Wireframe'
+    _marker_disp.ColorArrayName = ['POINTS', '']
+    _marker_color = GM_RIM_COLORS[_offset_idx % len(GM_RIM_COLORS)]
+    _marker_disp.AmbientColor = _marker_color
+    _marker_disp.DiffuseColor = _marker_color
+    _marker_disp.LineWidth = GM_RIM_LINE_WIDTH
+    log(f"Transverse cut marker: offset={_offset*1e3:.2f}mm behind laser -> z={_z_cut*1e3:.3f}mm")
 
 # Camera: top-down view, looking down +y (from above the surface toward the
 # domain center), up = -x -- with forward fixed at +y (must stay top-down),
@@ -203,10 +257,15 @@ colorbar.AddRangeLabels = 0  # otherwise the actual data min/max get added
 # flips which way +x points on screen, but nothing else in this stack
 # establishes a canonical x-orientation to conflict with.
 # CameraParallelScale is half the x-extent, times a small margin factor so
-# the content doesn't fill the frame edge-to-edge -- that would leave no
-# room for the (horizontal) colorbar overlay to sit without covering the
-# track itself. ViewSize's aspect matches the z/x window ratio, so the
-# margin is applied uniformly.
+# the content doesn't fill the frame edge-to-edge. ViewSize's aspect matches
+# the z/x window ratio, so the margin is applied uniformly.
+#
+# Tried shrinking this to 1.05 now that the colorbar is separate (task.md) --
+# reverted: it backfires, for the same reason documented in
+# lateral_screenshot.py's own FRAME_MARGIN comment (zooming in inflates the
+# flat-plate silhouette past the side-trim's fixed pixel-height threshold,
+# so the trim keeps *more* columns, not fewer -- measured 2443px -> 3017px
+# kept on testrun64 at t=1.974e-4s, a larger file, not smaller).
 FRAME_MARGIN = 1.3
 view.CameraParallelProjection = 1
 view.CameraViewUp = [-1, 0, 0]
@@ -223,7 +282,7 @@ log(f"Saved: {output_png}")
 # right; a naive non-white check doesn't work because the untouched flat
 # plate is colored too and forms a real, non-white 1px-tall line spanning
 # the entire window, so a minimum-vertical-extent filter is needed to
-# ignore it while still keeping real geometry and the colorbar/text).
+# ignore it while still keeping real geometry).
 import matplotlib.image as mpimg
 import numpy as np
 
@@ -240,6 +299,44 @@ if _content_cols.any():
     log(f"Trimmed side whitespace: kept columns [{_cmin},{_cmax}] of {_img.shape[1]}")
 else:
     log("No content found for side-trim; skipping")
+
+# Colorbar, written to its own file instead of overlaid on the render -- see
+# lateral_screenshot.py for the full reasoning (same derive-a-per-case-
+# filename-from-output_png approach, so repeated per-frame calls overwrite
+# one shared file instead of each writing a redundant identical copy).
+_cb_match = re.match(r'^(.*?)(?:_t[\d.eE+-]+)?(\.[^.]+)$', output_png)
+colorbar_png = f"{_cb_match.group(1)}_colorbar{_cb_match.group(2)}"
+
+cb_view = CreateView('RenderView')
+cb_view.OrientationAxesVisibility = 0
+cb_view.Background = [1, 1, 1]
+cb_view.ViewSize = [1200, 220]
+colorbar = GetScalarBar(ctf, cb_view)
+colorbar.Visibility = 1
+colorbar.Title = 'y (um)'
+colorbar.ComponentTitle = ''  # otherwise ParaView appends "Component" to
+                               # the title -- harmless when the color array
+                               # is bound to a shown representation (as in
+                               # the old embedded version), but this
+                               # standalone view has no representation to
+                               # infer a scalar (no-component) array from
+colorbar.TitleColor = [0, 0, 0]
+colorbar.LabelColor = [0, 0, 0]
+colorbar.TitleBold = 1
+colorbar.LabelBold = 1
+colorbar.Orientation = 'Horizontal'
+colorbar.TitleFontSize = round(colorbar.TitleFontSize * 3 * 0.5 * 0.5 * 2)
+colorbar.LabelFontSize = round(colorbar.LabelFontSize * 3 * 0.5 * 0.5 * 2)
+colorbar.WindowLocation = 'LowerCenter'
+colorbar.ScalarBarLength = 0.8
+colorbar.UseCustomLabels = 1
+colorbar.CustomLabels = [-100.0, 0.0, 100.0]
+colorbar.AddRangeLabels = 0  # otherwise the actual data min/max get added
+                              # as extra labels alongside the custom ones
+Render(cb_view)
+SaveScreenshot(colorbar_png, cb_view, ImageResolution=cb_view.ViewSize)
+Delete(cb_view)
+log(f"Saved colorbar: {colorbar_png}")
 
 if output_pvsm:
     SaveState(output_pvsm)

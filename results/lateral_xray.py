@@ -4,7 +4,8 @@
 # Same surface-based ray-tracing approach as lateral_xray.py (see that file
 # for the full history: sawtooth-elimination via marching-cubes isosurfaces
 # + exact ray/surface intersection, and the vtkStaticCellLocator locator
-# gotchas). This version additionally traces the liquid/solid (epsilon1)
+# gotchas). This version additionally traces the liquid/solid (T, thresholded
+# at TSolidus -- see FIELD_LS/LS_TSOLIDUS below for why T and not epsilon1)
 # boundary and draws it as a dotted line over the same grayscale image --
 # "the bottom of the melt pool" as seen from this lateral view -- without
 # baking the liquid/solid distinction into the displayed grayscale itself
@@ -71,11 +72,27 @@ FIELD_GM      = 'alpha_smoothed'  # gas/metal interface source. Recorded field
                                     # (one pass of fvc::average baked in by the
                                     # solver, see updateProps.H) -- NOT the raw
                                     # alpha.metal, and NOT re-smoothed here.
-FIELD_LS      = 'epsilon1'        # liquid/solid interface source: recorded
-                                    # liquid-fraction field (0=solid, 1=liquid),
-                                    # already correctly clamped/blended -- no
-                                    # need to recompute from T/TSolidus/TLiquidus.
-ISO_THRESHOLD = 0.5               # isosurface value for both fields.
+FIELD_LS      = 'T'               # liquid/solid (mushy-zone) interface source
+                                    # -- temperature, not epsilon1. epsilon1 is
+                                    # *derived* from T inside the solver
+                                    # (TEqn.H computes it from an enthalpy
+                                    # correction, then clamps it to [0,1]), so
+                                    # it saturates to a hard 0 or 1 almost
+                                    # everywhere and only genuinely varies
+                                    # across a very thin band -- exactly the
+                                    # kind of near-step field that contours
+                                    # poorly. T is the primary, continuous
+                                    # field the energy equation actually
+                                    # solves for, with no clamping, so its
+                                    # solidus crossing is much better-
+                                    # conditioned for marching cubes -- same
+                                    # reasoning and field choice as
+                                    # transverse_screenshot.py.
+ISO_THRESHOLD = 0.5               # gas/metal isosurface value (alpha_smoothed).
+LS_TSOLIDUS   = 840.0             # K -- mushy-zone bound, per CLAUDE.md's
+                                    # physical parameters (AlSi10Mg); matches
+                                    # transverse_screenshot.py's own
+                                    # LS_TSOLIDUS exactly.
 MU_GAS        = 0.0               # attenuation coeff, gas phase (per mm)
 MU_SOLID      = 5.0               # attenuation coeff, solid metal (per mm) --
                                     # matches the shared MU_METAL value from
@@ -193,14 +210,23 @@ gm_contour.UpdatePipeline(time=time_value)
 gm_poly = servermanager.Fetch(gm_contour)
 log(f"Gas/metal surface: {gm_poly.GetNumberOfCells()} cells")
 
-metal_only = Threshold(Input=merged)
+# Clip by scalar (not Threshold): Threshold keeps/discards whole cells,
+# giving a blocky, cell-resolution boundary. Clip with ClipType=None clips by
+# the Scalars/Value pair directly, interpolated like Contour, so metal_only's
+# own boundary sits at the same precision as gm_contour instead of snapping
+# to cell faces -- matches transverse_screenshot.py's construction exactly
+# (Invert=0 confirmed empirically to match Threshold's old [ISO_THRESHOLD,
+# 1.0] selection, i.e. identical bounds).
+metal_only = Clip(Input=merged)
+metal_only.ClipType = None
 metal_only.Scalars = ['POINTS', FIELD_GM]
-metal_only.ThresholdRange = [ISO_THRESHOLD, 1.0]
+metal_only.Value = ISO_THRESHOLD
+metal_only.Invert = 0
 metal_only.UpdatePipeline(time=time_value)
 
 ls_contour = Contour(Input=metal_only)
 ls_contour.ContourBy = ['POINTS', FIELD_LS]
-ls_contour.Isosurfaces = [ISO_THRESHOLD]
+ls_contour.Isosurfaces = [LS_TSOLIDUS]
 ls_contour.UpdatePipeline(time=time_value)
 ls_poly = servermanager.Fetch(ls_contour)
 log(f"Liquid/solid surface: {ls_poly.GetNumberOfCells()} cells")
@@ -253,16 +279,20 @@ def _self_test_locator(tree, poly, name, n_candidates=50):
     e.g. a triangle whose 3 vertices all share the same Y sits exactly in a
     Y-constant plane, parallel to our ray direction, which is a mathematically
     degenerate "ray lies in the triangle's plane" case that any ray-triangle
-    intersection correctly reports as no-hit. This happens for ls_poly in
-    particular: it's contoured from a Threshold output whose cut boundary
-    sits exactly on the Cartesian mesh's axis-aligned faces, and epsilon1
-    can be ~0.5 right there, producing a sliver triangle lying flat in that
-    cut plane. One such unlucky pick isn't a sign the locator is broken;
-    only failing on *every* candidate is. (These slivers can still leave a
-    handful of isolated pixels with a slightly-wrong liquid/solid split --
-    acceptable here since we're integrating a continuous-tone image, not
-    drawing a single fragile boundary line that would visibly kink at every
-    bad triangle.)
+    intersection correctly reports as no-hit. (Previously, when metal_only
+    was Threshold-based, this was systematic for ls_poly specifically: a
+    Threshold's cut boundary sits exactly on the Cartesian mesh's
+    axis-aligned faces, producing sliver triangles lying flat in that cut
+    plane. metal_only is now a scalar Clip -- interpolated, not snapped to
+    cell faces -- so that particular mechanism shouldn't recur, but the
+    general possibility of an unlucky degenerate candidate remains, hence
+    keeping this multi-candidate self-test rather than trusting cell 0.)
+    One such unlucky pick isn't a sign the locator is broken; only failing on
+    *every* candidate is. (Any remaining slivers can still leave a handful of
+    isolated pixels with a slightly-wrong liquid/solid split -- acceptable
+    here since we're integrating a continuous-tone image, not drawing a
+    single fragile boundary line that would visibly kink at every bad
+    triangle.)
     """
     ncells = poly.GetNumberOfCells()
     n_try = min(n_candidates, ncells)
@@ -320,7 +350,9 @@ log("point locator built")
 def start_state(x0, y0, z0):
     pid = point_locator.FindClosestPoint((x0, y0, z0))
     metal = gm_start_arr[pid] >= ISO_THRESHOLD
-    liquid = metal and (ls_start_arr[pid] >= ISO_THRESHOLD)
+    liquid = metal and (ls_start_arr[pid] >= LS_TSOLIDUS)  # T >= TSolidus, not
+                                                             # epsilon1 >= 0.5
+                                                             # -- see FIELD_LS
     return metal, liquid
 
 
