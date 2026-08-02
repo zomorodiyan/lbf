@@ -19,14 +19,32 @@
 #         tutorials/laserbeamFoam/plc/testrun12_1_SS316L or
 #         /workspace/tutorials/compressiblelaserbeamFoam/SS316L_Ti64_interface
 #
+# Drives results/render_view.py (--view=top/lateral/xray/transverse) --
+# formerly 4 separate scripts, merged into one (see that file's own header).
+#
 # Output (written to results/, prefix = the case directory's basename, e.g.
 # "testrun65_vdep_3_Al" or "testrun12_1_SS316L" -- not shortened, so cases
-# from different directories never collide):
+# from different directories never collide). Output filenames keep their
+# original per-view naming (top_screenshot/lateral_screenshot/lateral_xray/
+# transverse_screenshot) even though render_view.py's own --view flags are
+# shorter (top/lateral/xray/transverse) -- unrelated concerns, this script
+# controls the output filenames itself, independent of how the render
+# script names its own view modes:
 #   results/<prefix>_top_screenshot_t<time>.png         (one per timestep)
 #   results/<prefix>_lateral_screenshot_t<time>.png     (one per timestep)
 #   results/<prefix>_lateral_xray_t<time>.png           (one per timestep)
 #   results/<prefix>_transverse_screenshot_t<time>.png  (one per timestep)
-#   results/<prefix>_stacked_t<time>.png                (one per timestep)
+#   results/<prefix>_top_screenshot_colorbar.png         (one per case --
+#   results/<prefix>_lateral_screenshot_colorbar.png      overwritten each
+#                                                          timestep with the
+#                                                          same content, see
+#                                                          render_view.py's
+#                                                          _save_colorbar())
+#   results/<prefix>_stacked_t<time>.png                (one per timestep --
+#                                                          4 views + 1 legend
+#                                                          row of both
+#                                                          colorbars side by
+#                                                          side)
 #   results/<prefix>_stacked_video.mp4
 set -euo pipefail
 cd ~/lbf3
@@ -76,28 +94,30 @@ for t in "${TIMES[@]}"; do
   lat_png="results/${PREFIX}_lateral_screenshot_t${t}.png"
   xray_png="results/${PREFIX}_lateral_xray_t${t}.png"
   trans_png="results/${PREFIX}_transverse_screenshot_t${t}.png"
+  top_cb="results/${PREFIX}_top_screenshot_colorbar.png"
+  lat_cb="results/${PREFIX}_lateral_screenshot_colorbar.png"
   stacked_png="results/${PREFIX}_stacked_t${t}.png"
 
   echo "[$i/${#TIMES[@]}] t=$t"
 
   docker run --rm --user "$(id -u):$(id -g)" -e PYTHONUNBUFFERED=1 -v "$(pwd)":/workspace --entrypoint /opt/paraview/bin/pvpython \
     kitware/paraview:pv-v5.8.0-osmesa-py3 \
-    /workspace/results/top_screenshot.py "/workspace/$FOAM_FILE" "$t" "/workspace/$top_png" \
+    /workspace/results/render_view.py --view=top "/workspace/$FOAM_FILE" "$t" "/workspace/$top_png" \
     > /tmp/stackvid_top_${PREFIX}_${t}.log 2>&1 || { echo "  top view FAILED (see /tmp/stackvid_top_${PREFIX}_${t}.log)"; continue; }
 
   docker run --rm --user "$(id -u):$(id -g)" -e PYTHONUNBUFFERED=1 -v "$(pwd)":/workspace --entrypoint /opt/paraview/bin/pvpython \
     kitware/paraview:pv-v5.8.0-osmesa-py3 \
-    /workspace/results/lateral_screenshot.py "/workspace/$FOAM_FILE" "$t" "/workspace/$lat_png" \
+    /workspace/results/render_view.py --view=lateral "/workspace/$FOAM_FILE" "$t" "/workspace/$lat_png" \
     > /tmp/stackvid_lat_${PREFIX}_${t}.log 2>&1 || { echo "  lateral screenshot FAILED (see /tmp/stackvid_lat_${PREFIX}_${t}.log)"; continue; }
 
   docker run --rm --user "$(id -u):$(id -g)" -e PYTHONUNBUFFERED=1 -v "$(pwd)":/workspace --entrypoint /opt/paraview/bin/pvpython \
     kitware/paraview:pv-v5.8.0-osmesa-py3 \
-    /workspace/results/lateral_xray.py "/workspace/$FOAM_FILE" "$t" "/workspace/$xray_png" \
+    /workspace/results/render_view.py --view=xray "/workspace/$FOAM_FILE" "$t" "/workspace/$xray_png" \
     > /tmp/stackvid_xray_${PREFIX}_${t}.log 2>&1 || { echo "  lateral X-ray FAILED (see /tmp/stackvid_xray_${PREFIX}_${t}.log)"; continue; }
 
   docker run --rm --user "$(id -u):$(id -g)" -e PYTHONUNBUFFERED=1 -v "$(pwd)":/workspace --entrypoint /opt/paraview/bin/pvpython \
     kitware/paraview:pv-v5.8.0-osmesa-py3 \
-    /workspace/results/transverse_screenshot.py "/workspace/$FOAM_FILE" "$t" "/workspace/$trans_png" \
+    /workspace/results/render_view.py --view=transverse "/workspace/$FOAM_FILE" "$t" "/workspace/$trans_png" \
     > /tmp/stackvid_trans_${PREFIX}_${t}.log 2>&1 || { echo "  transverse view FAILED (see /tmp/stackvid_trans_${PREFIX}_${t}.log)"; continue; }
 
   docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd)":/workspace lbf3 bash -lc "
@@ -105,12 +125,16 @@ for t in "${TIMES[@]}"; do
     W=\$(for f in /workspace/$top_png /workspace/$lat_png /workspace/$xray_png /workspace/$trans_png; do
       ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 \"\$f\"
     done | sort -n | tail -1)
+    W2=\$((W / 2))
+    W1=\$((W - W2))
     ffmpeg -y \
       -i /workspace/$top_png \
       -i /workspace/$lat_png \
       -i /workspace/$xray_png \
       -i /workspace/$trans_png \
-      -filter_complex \"[0:v]scale=\${W}:-2[v0];[1:v]scale=\${W}:-2[v1];[2:v]scale=\${W}:-2[v2];[3:v]scale=\${W}:-2[v3];[v0][v1][v2][v3]vstack=inputs=4\" \
+      -i /workspace/$top_cb \
+      -i /workspace/$lat_cb \
+      -filter_complex \"[0:v]scale=\${W}:-2[v0];[1:v]scale=\${W}:-2[v1];[2:v]scale=\${W}:-2[v2];[3:v]scale=\${W}:-2[v3];[4:v]scale=\${W1}:-2[cb0];[5:v]scale=\${W2}:-2[cb1];[cb0][cb1]hstack=inputs=2[legend];[v0][v1][v2][v3][legend]vstack=inputs=5\" \
       /workspace/$stacked_png -loglevel error
   " > /tmp/stackvid_stack_${PREFIX}_${t}.log 2>&1 || { echo "  stacking FAILED (see /tmp/stackvid_stack_${PREFIX}_${t}.log)"; continue; }
 done
@@ -135,7 +159,11 @@ LAST_LINE=$(tail -2 "$CONCAT_LIST" | head -1)
 echo "$LAST_LINE" >> "$CONCAT_LIST"
 
 VIDEO_OUT="results/${PREFIX}_stacked_video.mp4"
+# -vf scale=trunc(iw/2)*2:trunc(ih/2)*2 -- libx264 requires even width/height;
+# the stacked frames' width comes from the widest per-view render (odd or
+# even depending on the case's own track length), so crop the rare
+# trailing odd pixel rather than let the encoder reject the whole video.
 docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd)":/workspace lbf3 bash -lc \
-  "ffmpeg -y -f concat -safe 0 -i /workspace/$CONCAT_LIST -vsync vfr -pix_fmt yuv420p -c:v libx264 -crf 18 /workspace/$VIDEO_OUT"
+  "ffmpeg -y -f concat -safe 0 -i /workspace/$CONCAT_LIST -vf 'scale=trunc(iw/2)*2:trunc(ih/2)*2' -vsync vfr -pix_fmt yuv420p -c:v libx264 -crf 18 /workspace/$VIDEO_OUT"
 
 echo "VIDEO DONE: $VIDEO_OUT"

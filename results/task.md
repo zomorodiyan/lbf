@@ -1,9 +1,9 @@
 # results/ post-processing task list
 
-Working list of improvements to the four post-processing scripts
-(`lateral_screenshot.py`, `lateral_xray.py`, `top_screenshot.py`,
-`transverse_screenshot.py`) and `_render_stacked_video.sh`. Add tasks here as
-they come up; move to Done as they're addressed.
+Working list of improvements to the post-processing pipeline --
+`render_view.py` (the four views: top, lateral, xray, transverse, formerly
+4 separate scripts, merged -- see Done below) and `_render_stacked_video.sh`.
+Add tasks here as they come up; move to Done as they're addressed.
 
 ## Open
 
@@ -67,39 +67,52 @@ Notes:
   there, so tightening the individual views should shrink the
   composite/mp4 too.
 
-### 2. Merge the 4 view scripts into one, selected by a CLI flag
+## Done
+
+### Merge the 4 view scripts into one, selected by a CLI flag
 
 `lateral_screenshot.py`, `lateral_xray.py`, `top_screenshot.py`, and
-`transverse_screenshot.py` already duplicate a growing amount of code
-verbatim -- `_load_laser_time_vs_position()`/`_laser_z_at()`, and (per the
-Done entries) `OFFSETS_BEHIND_LASER`/`GM_RIM_COLORS`/`GM_RIM_LINE_WIDTH`,
-plus shared crop-window constants (`X_LATERAL_MIN/MAX`, `Y_DEPTH_MIN/MAX`,
-`MELT_FRONT_OFFSET`, `CROP_PADDING`). Merge the four into a single script
-that picks its view via a flag, e.g. `pvpython all_views.py --view=top
-<case.foam> <time> <output.png>`, so shared logic and constants live in
-exactly one place instead of N near-identical copies that can silently drift
-apart (the exact risk already flagged in a couple of the Done entries below
-for the offset/color constants).
+`transverse_screenshot.py` merged into `results/render_view.py`, one
+`render_<view>()` function each, selected via
+`pvpython render_view.py --view={top,lateral,xray,transverse} <case.foam>
+<time> <output.png> [<output.pvsm>]`. `--view=xray` included despite being a
+fundamentally different technique (numpy ray-tracing + Beer-Lambert
+attenuation, no ParaView `Show()`/`Render()` at all) -- per the original
+request, one consistent entry point across all four views; it just doesn't
+call any of the ParaView-render-specific shared helpers the other three do.
 
-Open questions to settle before implementing:
-- **Scope**: `lateral_screenshot.py`/`top_screenshot.py`/`transverse_screenshot.py`
-  already share the most (same "contour + ParaView-render" technique,
-  same crop-window constants). `lateral_xray.py` is a fundamentally
-  different technique (numpy ray-tracing + Beer-Lambert attenuation, no
-  ParaView `Show()`/`Render()` at all) -- decide whether it belongs in the
-  same merged script as just another `--view` branch, or stays separate
-  since it barely shares implementation, only concepts.
-- **Invocation compatibility**: `_render_stacked_video.sh` currently runs
-  each view as its own `docker run ... pvpython <script>.py ...` call --
-  the merged form just needs an extra `--view=...` argument per call, not a
-  structural change to that script.
-- **Sequencing**: likely better done after task 1 settles (crop
-  tightening), rather than merging
-  first and then having to make the same in-flight changes across a bigger
-  consolidated file mid-refactor -- but flagging here in case there's a
-  reason to do it first instead.
+Shared code factored into module-level helpers/constants: `log()`,
+`_load_laser_time_vs_position()`, `_laser_z_at()`,
+`OFFSETS_BEHIND_LASER`/`GM_RIM_COLORS`/`GM_RIM_LINE_WIDTH`, the crop-window
+constants, `_save_colorbar()`, `_trim_side_whitespace()`,
+`_draw_offset_markers()` (the transverse-cut marker-line loop, parameterized
+by a `make_endpoints(z_cut)` callback since top/lateral fix different axes
+at the marker position). `lateral_xray.py`'s own `XRAY_Y_DEPTH_MAX = 0.45e-3`
+was deliberately *not* unified with the shared `Y_DEPTH_MIN/MAX` the other
+three use -- it's a genuinely different value, not a duplicate.
 
-## Done
+**Verification**: rendered all 4 views on testrun64 at t=1.974e-4s through
+the merged script and md5sum-compared against the pre-merge scripts' output
+-- byte-identical in every case (top, lateral, transverse, xray all matched
+exactly, including their colorbar files). Also ran the updated
+`_render_stacked_video.sh` (which now calls `render_view.py --view=...`
+instead of the 4 separate scripts) end-to-end on 2 real timesteps.
+
+**Found and fixed a real, pre-existing bug** while doing that end-to-end
+run (unrelated to the merge itself -- present since the colorbar-legend-row
+change): the stacking `ffmpeg` command split the legend row's width as
+`W2 = W/2` for *both* colorbar halves, which silently only worked when `W`
+was even -- for an odd `W` (2599px, hit on this run), `2*W2 = W-1`, one
+pixel short of the other rows' width, and `vstack` rejected the mismatch.
+Fixed by computing `W1 = W - W2` for the first half instead of reusing `W2`,
+so the two halves always sum to exactly `W`. Separately, the final mp4
+encode step failed on that same odd width (`libx264` requires even
+width/height) -- fixed by adding `-vf scale=trunc(iw/2)*2:trunc(ih/2)*2` to
+crop the rare trailing odd pixel before encoding.
+
+The original 4 scripts were removed (`git rm`) now that `render_view.py`
+verifiably replaces them -- recoverable via git history if needed
+(`git log -- results/<old-script>.py`).
 
 ### Show the transverse cut lines on the lateral view too
 
