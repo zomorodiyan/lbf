@@ -1,105 +1,95 @@
-# Task: Replicate VDEP Experimental Results (Al 6061, laserbeamFoam)
+# Task: Replicate VDEP Experimental Results (AlSi10Mg, laserbeamFoam)
 
 ## Ultimate Goal
 
 Reproduce experimentally measured vapor depression (keyhole) depth and morphology
-for Al 6061 single-track laser scans at varying power levels, using the `laserbeamFoam`
-VOF solver. Validation target: keyhole depth vs. laser power curve from X-ray
-synchrotron or ex-situ characterization data.
+for AlSi10Mg single-track laser scans across a range of powers, using the
+`laserbeamFoam` VOF solver. Validation target: keyhole depth vs. laser power curve
+from X-ray synchrotron or ex-situ characterization data.
 
 ---
+
+## Current Pipeline
+
+The active case set is **testrun58–testrun67** — a two-stage seed→fork lineage (a
+shared 100µs warmup/stabilization state at each of two core counts, then six power
+forks branching off it). Full case table, per-person assignments, and the exact
+seed→fork hand-off procedure live in [vdep_power_sweep.md](vdep_power_sweep.md) —
+read that before running, seeding, or reconstructing any of these cases. This file
+covers the physical setup, overall goal, and lessons that apply across the whole
+effort.
 
 ## Physical Setup
 
-- **Material:** Al 6061 (T_sol=855 K, T_liq=925 K, k=167 W/m·K, ρ=2700 kg/m³)
-- **Laser:** 1064 nm, 35 µm radius, Drude/Fresnel absorptivity (~11% at normal incidence)
+- **Material:** AlSi10Mg (T_sol=840 K, T_liq=867 K, ρ=2670 kg/m³)
+- **Laser:** 1064 nm, 35 µm radius, Drude/Fresnel absorptivity (~11% at normal
+  incidence for liquid Al)
 - **Scan speed:** 6000 mm/s (6 m/s)
-- **Powers of interest:** 650, 700, 750, 800, 850 W
-- **Domain:** 0.64 × 0.7 × 3.2 mm (x lateral, y depth, z scan)
-  - Gas headspace: 0.3 mm above surface
-  - Substrate: 0.4 mm below surface
-  - Track: z = 0.5 mm → 2.9 mm (2.4 mm), 0.5 mm lead-in, 0.3 mm run-out
-- **Total track duration:** 400 µs
-- **Mesh:** 16×18×80 base cells (~39 µm), 3-level AMR → ~5 µm at interface
-- **Decomposition:** 16 cores, hierarchical n=(2 1 8); 32 cores n=(2 2 8) for heavy cases
-
----
-
-## Strategy
-
-### Original power sweep (constant kappa) — testruns 43–48
-
-Warmup in tr43 (1000W→500W, 0–100 µs), then forked into tr44–47 (650/700/750/800 W).
-tr48 = 850W continuation of tr43 state, constant kappa 167 W/m·K.
-
-**Observation:** tr44–47 produce a keyhole (VDEP confirmed) but melt pool is too short —
-keyhole walls are in near-constant contact with the solidification front on both sides,
-forming unphysical vapor tails. Keyhole depth also too shallow (<200 µm).
-
-### Improved series (temperature-dependent kappa) — testruns 50–52
-
-To elongate the melt pool and deepen the keyhole:
-- **Thermal conductivity:** changed from constant 167 W/m·K to linear
-  `poly_kappa (232.0 -0.076 0 0 0 0 0 0)` → 167 W/m·K at solidus (855 K),
-  ~80 W/m·K at 2000 K, positive past vaporization temperature.
-- **Solver fix required:** `UEqn.H` line 48 used raw `T` in the recoil pressure
-  `exp()` — caused SIGFPE when gas-phase cells had near-zero T with non-constant kappa.
-  Fixed by applying `Tsafe = max(T, 300 K)` clamp (matching the guard already in TEqn.H).
-  Docker image rebuilt after fix.
-
-#### tr50 — warmup with new kappa
-- Copy of tr43, linear kappa, 16 cores
-- Run 0–100 µs (same warmup: 1000W → 500W)
-- Provides clean initial state for tr51/tr52
-
-#### tr51 — low-power stabilization leg (650 W, 0–25% of track)
-- Fork from tr50 at t=100 µs
-- Power: 650 W constant
-- Duration: 100–200 µs (first 25% of the scan track)
-- Purpose: allow melt pool to reach quasi-steady state at moderate power
-  before ramping to target power
-
-#### tr52 — high-power production run (850 W, 25–100% of track)
-- Fork from tr51 at t=200 µs
-- Power: 850 W constant
-- Duration: 200–400 µs (remaining 75% of scan track)
-- Purpose: capture quasi-steady keyhole morphology at 850 W with elongated melt pool
+- **Powers of interest:** 650–900 W (six forks, see case table in
+  vdep_power_sweep.md)
+- **Mesh:** 40 µm base cells, 3-level AMR at the metal–gas interface → ~5 µm
+- **Decomposition:** hierarchical — 16 cores (n=(2 1 8)) or 32 cores (n=(2 2 8)),
+  depending on the fork; must stay fixed across an entire seed→fork lineage
 
 ---
 
 ## Progress
 
-- [x] Material properties set for Al 6061 (tr37 onward)
-- [x] Domain geometry finalized: 0.64×0.7×3.2 mm, 16×18×80 base cells (tr43)
-- [x] Warmup strategy designed: 1000W→500W, avoids ejection instability
-- [x] tr43 complete (0–100 µs, constant kappa)
-- [x] tr44 (650W), tr45 (700W), tr46 (750W), tr47 (800W) run to ~337–400 µs
-- [x] tr47 fully reconstructed (75 snapshots, VTK ready)
-- [x] tr46 reconstructed to 337 µs (62 snapshots, VTK ready)
-- [x] tr48 (850W, constant kappa) running — continuation of tr43 state
-- [x] Identified melt pool too short issue in tr44–47 (constant kappa)
-- [x] Fixed SIGFPE bug in UEqn.H (Tsafe clamp for pVap exp())
-- [x] Docker image rebuilt with fix
-- [ ] Run tr50 (warmup, linear kappa) — wait for successful completion to t=100 µs
-- [ ] Fork tr50 → tr51 (650 W, 100–200 µs)
-- [ ] Fork tr51 → tr52 (850 W, 200–400 µs)
-- [ ] Reconstruct and post-process tr51/tr52
+- [x] Seed lineage built and validated: testrun58/59 (16-core) and testrun60/61
+  (32-core), each running 0→100µs (1000W warmup, then 650W stabilization)
+- [x] Seed→fork mesh/field hand-off procedure tested end-to-end
+  (testrun58→testrun59) — see vdep_power_sweep.md's "Hand-off validated" note
+- [ ] Reconstruct and post-process all six forks once complete
 - [ ] Extract keyhole depth vs. power and compare to experiment
+
+### Fork status (as of 2026-07-31)
+
+| Case | Power | Owner | Progress | Notes |
+|---|---|---|---|---|
+| testrun62 | 650 W | Mehrdad | 80% (t≈340µs) | running |
+| testrun63 | 700 W | Mehrdad | 0% | forked, not yet started |
+| testrun64 | 750 W | Mehrdad | 100% (t=400µs) | complete |
+| testrun66 | 850 W | Mehrdad | 15% (t≈145µs) | running |
+| testrun65 | 800 W | Zixun | 73% (t≈320µs) | running, latest frame reconstructed |
+| testrun67 | 900 W | Zixun | 60% (t≈280µs) | running, latest frame reconstructed |
+
+Check with whoever owns a given fork for anything more recent than this table
+— it's a snapshot from the messages above, not a live status.
+
+---
+
+## Post-processing: turning reconstructed results into animations
+
+`results/_render_stacked_video.sh` batch-renders every reconstructed timestep of a
+case into three views (top-down, lateral, synthetic X-ray), stacks them into one
+image per timestep, and assembles an mp4. Full details, including the exact script
+options and troubleshooting, are in TESTRUNS.md's "Post-processing" and
+"Permissions across both Docker images" sections — short version:
+
+1. Make sure the case is reconstructed (`reconstructParMesh` + `reconstructPar` —
+   see TESTRUNS.md).
+2. One-time setup, per machine:
+   - Rebuild `lbf3` if it predates the `ffmpeg` addition to the Dockerfile:
+     `docker build --build-arg CACHE_BUST=$(date +%s) -t lbf3 .`
+   - Pull the second image the script needs (public, not something we build):
+     `docker pull kitware/paraview:pv-v5.8.0-osmesa-py3`
+3. Run it: `bash results/_render_stacked_video.sh <testrun-number-or-path>`, e.g.
+   `bash results/_render_stacked_video.sh 65`.
+
+If you hit a `Permission denied` error partway through, it's almost always a
+Docker user-mismatch issue, not a real problem with the data — see TESTRUNS.md's
+"Permissions across both Docker images" section for the fix.
 
 ---
 
 ## Key Lessons Learned
 
-- Al 6061 has higher thermal conductivity (167 W/m·K vs ~110 for AlSi10Mg) —
-  keyhole does not form at target powers from a cold start; 1000W spike needed.
-- Reducing gas headspace below 0.3 mm causes severe timestep collapse during
-  1000W startup due to ejected droplets reaching the atmosphere boundary.
-- The violent startup phase (first ~10 µs at 1000W) is the most expensive part;
-  timestep recovers to ~5–10 ns once keyhole stabilizes around t=10–20 µs.
-- tr43 stage 1 (0.7mm deep domain) completed in 18 min vs tr39–41 (0.5mm domain)
-  still crawling after 4h — domain depth matters more than base cell count.
-- Running 4 cases simultaneously causes ~12x slowdown vs solo due to memory
-  bandwidth contention. Run sequentially or max 2 at a time.
-- Non-constant poly_kappa crashes with SIGFPE in UEqn.H because pVap exp() uses
-  raw T without a lower bound — fixed by adding Tsafe = max(T, 300K) clamp.
-- processor dirs are root-owned — always delete via Docker, not sudo rm.
+- Running multiple cases simultaneously on one machine causes severe slowdown
+  (~12x observed with 4 concurrent runs) due to memory bandwidth contention —
+  run sequentially, or at most 2 at a time.
+- `processor*/` directories are root-owned (written by Docker as root) — always
+  delete them via Docker, never `sudo rm` (see TESTRUNS.md).
+- Decomposition (core count) must stay identical across an entire seed→fork
+  lineage — continuation `Allrun` scripts read their own `decomposeParDict`
+  rather than inspecting the `processor*/` dirs they were seeded with, so a
+  core-count change can only happen at a fresh seed stage, not mid-lineage.
