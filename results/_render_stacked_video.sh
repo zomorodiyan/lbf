@@ -30,21 +30,21 @@
 # shorter (top/lateral/xray/transverse) -- unrelated concerns, this script
 # controls the output filenames itself, independent of how the render
 # script names its own view modes:
-#   results/<prefix>_top_screenshot_t<time>.png         (one per timestep)
-#   results/<prefix>_lateral_screenshot_t<time>.png     (one per timestep)
-#   results/<prefix>_lateral_xray_t<time>.png           (one per timestep)
-#   results/<prefix>_transverse_screenshot_t<time>.png  (one per timestep)
-#   results/<prefix>_top_screenshot_colorbar.png         (one per case --
-#   results/<prefix>_lateral_screenshot_colorbar.png      overwritten each
-#                                                          timestep with the
-#                                                          same content, see
+#   results/<prefix>_top_screenshot_t<time>.png         (one per timestep --
+#                                                          colorbar embedded
+#                                                          inside, see
 #                                                          render_view.py's
 #                                                          _save_colorbar())
+#   results/<prefix>_lateral_screenshot_t<time>.png     (one per timestep --
+#                                                          colorbar embedded
+#                                                          inside, ditto)
+#   results/<prefix>_lateral_xray_t<time>.png           (one per timestep)
+#   results/<prefix>_transverse_screenshot_t<time>.png  (one per timestep)
 #   results/<prefix>_stacked_t<time>.png                (one per timestep --
-#                                                          4 views + 1 legend
-#                                                          row of both
-#                                                          colorbars side by
-#                                                          side)
+#                                                          top/transverse/
+#                                                          lateral/xray
+#                                                          vstacked, in that
+#                                                          order)
 #   results/<prefix>_stacked_video.mp4
 set -euo pipefail
 cd ~/lbf3
@@ -94,8 +94,6 @@ for t in "${TIMES[@]}"; do
   lat_png="results/${PREFIX}_lateral_screenshot_t${t}.png"
   xray_png="results/${PREFIX}_lateral_xray_t${t}.png"
   trans_png="results/${PREFIX}_transverse_screenshot_t${t}.png"
-  top_cb="results/${PREFIX}_top_screenshot_colorbar.png"
-  lat_cb="results/${PREFIX}_lateral_screenshot_colorbar.png"
   stacked_png="results/${PREFIX}_stacked_t${t}.png"
 
   echo "[$i/${#TIMES[@]}] t=$t"
@@ -120,21 +118,27 @@ for t in "${TIMES[@]}"; do
     /workspace/results/render_view.py --view=transverse "/workspace/$FOAM_FILE" "$t" "/workspace/$trans_png" \
     > /tmp/stackvid_trans_${PREFIX}_${t}.log 2>&1 || { echo "  transverse view FAILED (see /tmp/stackvid_trans_${PREFIX}_${t}.log)"; continue; }
 
+  # Order: top, transverse, lateral, xray. Colorbars are embedded inside
+  # top_png/lat_png already (render_view.py's _save_colorbar()), so this is
+  # just a straight 4-input vstack now -- no separate legend row to build.
+  # transverse's bottom 20% is cropped off first (user request, 2026-08-02,
+  # 10% -> 20%, "we need more cut-off from bottom of the transverse cross
+  # section views") -- applied only for this stacked composite, not to the
+  # standalone demo_*_transverse.png file itself. render_view.py's
+  # render_transverse keeps its own colorbar bottom_margin_frac comfortably
+  # above this fraction so the bar isn't cut off by it -- keep the two in
+  # sync if either changes.
   docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd)":/workspace lbf3 bash -lc "
     set -e
     W=\$(for f in /workspace/$top_png /workspace/$lat_png /workspace/$xray_png /workspace/$trans_png; do
       ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 \"\$f\"
     done | sort -n | tail -1)
-    W2=\$((W / 2))
-    W1=\$((W - W2))
     ffmpeg -y \
       -i /workspace/$top_png \
+      -i /workspace/$trans_png \
       -i /workspace/$lat_png \
       -i /workspace/$xray_png \
-      -i /workspace/$trans_png \
-      -i /workspace/$top_cb \
-      -i /workspace/$lat_cb \
-      -filter_complex \"[0:v]scale=\${W}:-2[v0];[1:v]scale=\${W}:-2[v1];[2:v]scale=\${W}:-2[v2];[3:v]scale=\${W}:-2[v3];[4:v]scale=\${W1}:-2[cb0];[5:v]scale=\${W2}:-2[cb1];[cb0][cb1]hstack=inputs=2[legend];[v0][v1][v2][v3][legend]vstack=inputs=5\" \
+      -filter_complex \"[0:v]scale=\${W}:-2[v0];[1:v]crop=iw:ih*0.8:0:0,scale=\${W}:-2[v1];[2:v]scale=\${W}:-2[v2];[3:v]scale=\${W}:-2[v3];[v0][v1][v2][v3]vstack=inputs=4\" \
       /workspace/$stacked_png -loglevel error
   " > /tmp/stackvid_stack_${PREFIX}_${t}.log 2>&1 || { echo "  stacking FAILED (see /tmp/stackvid_stack_${PREFIX}_${t}.log)"; continue; }
 done
