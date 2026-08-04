@@ -157,30 +157,27 @@ VIEW_HEIGHT_PX = 500           # output image height in px (per-panel for
                                # transverse); width is set to exactly match
                                # each view's own crop-window aspect ratio,
                                # so there's no letterboxing
-FRAME_MARGIN = 1.3             # small margin so content doesn't fill the
-                               # frame edge-to-edge (lateral/top/transverse).
-                               # NOTE: tried shrinking this to 1.05 once the
-                               # colorbar became a separate file (no longer
-                               # needed for headroom) -- reverted, it
-                               # backfires: zooming in makes the flat
-                               # plate's edge-on silhouette taller in
-                               # *pixels*, and the whitespace-trim below
-                               # uses a *fixed* pixel-height threshold to
-                               # tell that silhouette apart from real
-                               # content, so a smaller margin pushes more of
-                               # the background past that threshold and the
-                               # trim ends up keeping *more* columns, not
-                               # fewer. Measured on testrun64 at
-                               # t=1.974e-4s: kept columns went from 2503px
-                               # to 3094px (lateral) and 2443px to 3017px
-                               # (top) when margin dropped from 1.3 to 1.05
-                               # -- both larger files. (transverse has no
-                               # whitespace-trim step to begin with -- its
-                               # per-panel crop window is small and fixed,
-                               # not scan-spanning, so there's no
-                               # accumulated blank space in the first place
-                               # -- so this margin only affects its zoom
-                               # level, not its file size.)
+FRAME_MARGIN = 1.02             # small margin (render_top/render_lateral
+                               # only) so content doesn't literally touch
+                               # the frame edge. Was 1.3 -- a much larger
+                               # margin, back when render_top/render_lateral
+                               # still cropped their saved PNG down to
+                               # content afterward (see those functions' own
+                               # comments, 2026-08-03: that crop is gone
+                               # now, so this margin is no longer trimmed
+                               # away -- it shows up directly as wasted
+                               # blank space in the final image, e.g.
+                               # user-reported, 2026-08-03: "top and
+                               # lateral are smaller than expected"). A
+                               # previous attempt to shrink this (to 1.05)
+                               # was reverted for an unrelated reason that
+                               # no longer applies -- it interacted badly
+                               # with that same now-removed crop's
+                               # fixed-pixel-height content/background
+                               # discriminator, not with anything about the
+                               # rendering itself. 1.02 (not 1.0 exactly)
+                               # keeps a hairline buffer so antialiased
+                               # edge pixels don't get clipped.
 
 
 def _load_laser_time_vs_position(case_dir):
