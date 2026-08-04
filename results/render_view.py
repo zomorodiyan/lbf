@@ -662,72 +662,48 @@ def _clip_top_fraction(output_png, frac):
     log(f"Clipped top {frac * 100:.0f}%: kept rows [{cut},{img.shape[0] - 1}]")
 
 
-def _trim_vertical_whitespace_uniform(image_paths):
-    """Like _trim_vertical_whitespace, but computes one shared row range
-    across *all* given images and applies it to every one -- for
-    render_transverse's panels, which must stay the same height to be
-    hstacked together afterward (independent per-panel trimming could crop
-    each to a different height, since real melt-pool extent genuinely
-    differs cut to cut). Takes the union of content rows across panels, so
-    nothing real gets clipped in any single panel.
+def _pad_to_uniform_size(image_paths):
+    """Pad every given PNG (bottom and right edges, with opaque white) up to
+    the max width/height found across the whole batch, so all of them end
+    up exactly the same size.
+
+    Used (via --trim-batch, see main()) by _render_stacked_video.sh across
+    a whole batch of same-view images spanning every timestep of a case --
+    render_top/render_lateral/render_xray's own per-frame content trim
+    (_trim_side_whitespace*/_trim_vertical_whitespace) crops each frame to
+    *that frame's own* content extent, which for render_lateral genuinely
+    differs frame to frame (melt-pool/spatter depth changes over the scan),
+    leaving the stacked video with a different frame size at every timestep
+    (user-reported, 2026-08-03).
+
+    Padding, not a shared crop: an earlier version of this tried to compute
+    one shared union-of-content crop window and apply it to every image
+    (mirroring the old flat-transverse design's own same-frame multi-panel
+    helper, which needed a shared height to hstack cleanly) -- but by the
+    time this runs, each frame has *already* been independently trimmed to
+    its own content by the render_* call that produced it, so frame N's row
+    0 and frame M's row 0 no longer correspond to the same physical scene
+    position; naively slicing every image to one shared [rmin,rmax] range
+    silently clamps to whichever is smaller instead of aligning anything,
+    which does NOT reliably equalize size (verified empirically: 3 of 5 test
+    frames still came out different heights). Padding sidesteps the
+    alignment problem entirely -- each frame's own already-correct content
+    stays exactly as rendered, top/left-anchored, with white filling in
+    whatever's missing at the bottom/right to reach the batch's own max
+    extent, which is all "same final dimensions" actually requires.
     """
     imgs = [mpimg.imread(p) for p in image_paths]
-    rmin_all, rmax_all = None, None
-    for img in imgs:
-        non_white = np.any(img[:, :, :3] < 0.98, axis=2)
-        content_rows = np.any(non_white, axis=1)
-        if not content_rows.any():
-            continue
-        rmin, rmax = np.where(content_rows)[0][[0, -1]]
-        rmin_all = rmin if rmin_all is None else min(rmin_all, rmin)
-        rmax_all = rmax if rmax_all is None else max(rmax_all, rmax)
-    if rmin_all is None:
-        log("No content found for vertical trim across panels; skipping")
-        return
-    pad = 10
-    rmin_all = max(0, rmin_all - pad)
-    rmax_all = min(imgs[0].shape[0] - 1, rmax_all + pad)
+    max_h = max(img.shape[0] for img in imgs)
+    max_w = max(img.shape[1] for img in imgs)
     for p, img in zip(image_paths, imgs):
-        mpimg.imsave(p, img[rmin_all:rmax_all + 1, :])
-    log(f"Trimmed vertical whitespace (union across panels): kept rows [{rmin_all},{rmax_all}]")
-
-
-def _trim_side_whitespace_uniform(image_paths, min_col_height_px=5):
-    """Like _trim_side_whitespace, but computes one shared column range
-    across *all* given images and applies it to every one -- same "stay the
-    same size, take the union of content" reasoning as
-    _trim_vertical_whitespace_uniform above, just on the other axis. Needed
-    because each transverse panel's own camera framing (FRAME_MARGIN) leaves
-    blank margin on both sides that a small PANEL_GAP_PX between panels
-    can't remove on its own -- panels visibly weren't touching even at a
-    tiny gap (user-reported, 2026-08-02). Uses the same minimum-column-
-    content-height trick as _trim_side_whitespace (not just "any non-white
-    pixel") for the same reason: the untouched flat cap along each panel's
-    bottom is a real, non-white row spanning every column already.
-    """
-    imgs = [mpimg.imread(p) for p in image_paths]
-    cmin_all, cmax_all = None, None
-    for img in imgs:
-        non_white = np.any(img[:, :, :3] < 0.98, axis=2)
-        content_cols = np.count_nonzero(non_white, axis=0) >= min_col_height_px
-        if not content_cols.any():
+        h, w = img.shape[:2]
+        if h == max_h and w == max_w:
             continue
-        cmin, cmax = np.where(content_cols)[0][[0, -1]]
-        cmin_all = cmin if cmin_all is None else min(cmin_all, cmin)
-        cmax_all = cmax if cmax_all is None else max(cmax_all, cmax)
-    if cmin_all is None:
-        log("No content found for side trim across panels; skipping")
-        return
-    pad = 6  # narrowed 10 -> 3, then doubled back up to 6 along with
-             # PANEL_GAP_PX -- this padding applies on *both* sides of
-             # every panel, so it compounds with PANEL_GAP_PX between
-             # adjacent panels (user request, 2026-08-02, "the space in
-             # between transverse images should twice what it is")
-    cmin_all = max(0, cmin_all - pad)
-    cmax_all = min(imgs[0].shape[1] - 1, cmax_all + pad)
-    for p, img in zip(image_paths, imgs):
-        mpimg.imsave(p, img[:, cmin_all:cmax_all + 1])
-    log(f"Trimmed side whitespace (union across panels): kept columns [{cmin_all},{cmax_all}]")
+        channels = img.shape[2]
+        padded = np.ones((max_h, max_w, channels), dtype=img.dtype)
+        padded[:h, :w] = img
+        mpimg.imsave(p, padded)
+    log(f"Padded {len(image_paths)} frames to a uniform {max_w}x{max_h}")
 
 
 def _trim_whitespace_bbox(img, pad=8):
@@ -2414,12 +2390,27 @@ def render_xray(foam_file, time_value, output_png):
 def main():
     parser = argparse.ArgumentParser(
         description="Render one of the four VDEP power-sweep post-processing views.")
-    parser.add_argument('--view', required=True, choices=['top', 'lateral', 'xray', 'transverse'])
-    parser.add_argument('case_foam')
-    parser.add_argument('time', type=float)
-    parser.add_argument('output_png')
+    parser.add_argument('--view', choices=['top', 'lateral', 'xray', 'transverse'])
+    parser.add_argument('--trim-batch', nargs='+', metavar='PNG',
+                         help="Skip rendering: pad all given PNGs (bottom/right, opaque white) "
+                              "up to the batch's own max width/height so every one ends up the "
+                              "same size -- see _pad_to_uniform_size's own docstring. Used by "
+                              "_render_stacked_video.sh across one view's full time series, "
+                              "after rendering every timestep and before stacking.")
+    parser.add_argument('case_foam', nargs='?')
+    parser.add_argument('time', type=float, nargs='?')
+    parser.add_argument('output_png', nargs='?')
     parser.add_argument('output_pvsm', nargs='?', default=None)
     args = parser.parse_args()
+
+    if args.trim_batch:
+        _pad_to_uniform_size(args.trim_batch)
+        return
+
+    if not args.view:
+        parser.error("--view is required unless --trim-batch is given")
+    if not (args.case_foam and args.time is not None and args.output_png):
+        parser.error("case_foam, time, and output_png are required unless --trim-batch is given")
 
     if args.view == 'top':
         render_top(args.case_foam, args.time, args.output_png, args.output_pvsm)

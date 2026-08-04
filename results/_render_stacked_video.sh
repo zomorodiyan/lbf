@@ -21,6 +21,13 @@
 #
 # Drives results/render_view.py (--view=top/lateral/xray/transverse) --
 # formerly 4 separate scripts, merged into one (see that file's own header).
+# Three passes: render every view for every timestep, then normalize each
+# view's own time series to one shared size (render_view.py's
+# --trim-batch, see its own docstring) since each render_* function's
+# per-frame content trim otherwise leaves that view's dimensions drifting
+# timestep to timestep (most visibly render_lateral, whose content height
+# tracks the melt-pool/spatter depth -- user-reported, 2026-08-03), then
+# stack.
 #
 # Output (written to results/, prefix = the case directory's basename, e.g.
 # "testrun65_vdep_3_Al" or "testrun12_1_SS316L" -- not shortened, so cases
@@ -87,6 +94,16 @@ if [ -z "$FOAM_FILE" ]; then
 fi
 echo "Using .foam marker: $FOAM_FILE"
 
+# Pass 1: render every view for every timestep first (no stacking yet).
+# Each render_* function trims its own PNG down to *that frame's own*
+# content extent (_trim_side_whitespace/_trim_vertical_whitespace) -- fine
+# within a single frame, but the content extent (especially render_lateral's
+# melt-pool/spatter depth) genuinely differs timestep to timestep, so each
+# view's per-frame dimensions drifted across a batch and so did the final
+# stacked frame size (user-reported, 2026-08-03). Pass 2 below normalizes
+# each view's own time series to one shared size before anything gets
+# stacked, so collect this pass's per-view file lists as we go.
+top_pngs=(); lat_pngs=(); xray_pngs=(); trans_pngs=()
 i=0
 for t in "${TIMES[@]}"; do
   i=$((i+1))
@@ -94,7 +111,6 @@ for t in "${TIMES[@]}"; do
   lat_png="results/${PREFIX}_lateral_screenshot_t${t}.png"
   xray_png="results/${PREFIX}_lateral_xray_t${t}.png"
   trans_png="results/${PREFIX}_transverse_screenshot_t${t}.png"
-  stacked_png="results/${PREFIX}_stacked_t${t}.png"
 
   echo "[$i/${#TIMES[@]}] t=$t"
 
@@ -118,12 +134,62 @@ for t in "${TIMES[@]}"; do
     /workspace/results/render_view.py --view=transverse "/workspace/$FOAM_FILE" "$t" "/workspace/$trans_png" \
     > /tmp/stackvid_trans_${PREFIX}_${t}.log 2>&1 || { echo "  transverse view FAILED (see /tmp/stackvid_trans_${PREFIX}_${t}.log)"; continue; }
 
-  # Order: top, transverse, lateral, xray. Colorbars are embedded inside
-  # top_png/lat_png already (render_view.py's _save_colorbar()), so this is
-  # just a straight 4-input vstack -- no separate legend row to build, and
-  # no per-panel cropping (the old transverse bottom-20% crop was dropped,
-  # user request, 2026-08-03: no longer needed now that render_transverse's
-  # own framing/margins are tuned directly).
+  top_pngs+=("$top_png"); lat_pngs+=("$lat_png"); xray_pngs+=("$xray_png"); trans_pngs+=("$trans_png")
+done
+
+echo "ALL FRAMES RENDERED"
+
+# Pass 2: normalize each view's own time series to one shared size by
+# padding every frame up to that view's own max width/height across the
+# whole batch (see render_view.py's _pad_to_uniform_size docstring for why
+# padding, not a shared crop -- each frame's already been independently
+# content-trimmed to its own extent by the render_* call that produced it,
+# so a naive shared crop can't realign them). Skips a view entirely if
+# fewer than 2 of its frames rendered (nothing to pad to, and padding a
+# single image to its own size would just be a no-op anyway).
+for view_name in top lat xray trans; do
+  case $view_name in
+    top) pngs=("${top_pngs[@]}") ;;
+    lat) pngs=("${lat_pngs[@]}") ;;
+    xray) pngs=("${xray_pngs[@]}") ;;
+    trans) pngs=("${trans_pngs[@]}") ;;
+  esac
+  if [ "${#pngs[@]}" -lt 2 ]; then
+    echo "  skipping size normalization for $view_name (${#pngs[@]} frame(s))"
+    continue
+  fi
+  echo "Normalizing $view_name to a uniform size across ${#pngs[@]} frames"
+  workspace_pngs=("${pngs[@]/#/\/workspace\/}")
+  docker run --rm --user "$(id -u):$(id -g)" -e PYTHONUNBUFFERED=1 -v "$(pwd)":/workspace --entrypoint /opt/paraview/bin/pvpython \
+    kitware/paraview:pv-v5.8.0-osmesa-py3 \
+    /workspace/results/render_view.py --trim-batch "${workspace_pngs[@]}" \
+    > /tmp/stackvid_trim_${PREFIX}_${view_name}.log 2>&1 || { echo "  uniform-trim FAILED for $view_name (see /tmp/stackvid_trim_${PREFIX}_${view_name}.log)"; }
+done
+
+# Pass 3: stack. Order: top, transverse, lateral, xray. Colorbars are
+# embedded inside top_png/lat_png already (render_view.py's
+# _save_colorbar()), so this is just a straight 4-input vstack -- no
+# separate legend row to build, and no per-panel cropping (the old
+# transverse bottom-20% crop was dropped, user request, 2026-08-03: no
+# longer needed now that render_transverse's own framing/margins are tuned
+# directly). Every view's own frames are now a uniform size (pass 2 above),
+# so W is the same on every iteration too -- kept as a per-iteration
+# ffprobe computation anyway rather than hoisted out, since it's now cheap
+# insurance against a view that got skipped above (single-frame batch).
+i=0
+for t in "${TIMES[@]}"; do
+  i=$((i+1))
+  top_png="results/${PREFIX}_top_screenshot_t${t}.png"
+  lat_png="results/${PREFIX}_lateral_screenshot_t${t}.png"
+  xray_png="results/${PREFIX}_lateral_xray_t${t}.png"
+  trans_png="results/${PREFIX}_transverse_screenshot_t${t}.png"
+  stacked_png="results/${PREFIX}_stacked_t${t}.png"
+  if [ ! -f "$top_png" ] || [ ! -f "$lat_png" ] || [ ! -f "$xray_png" ] || [ ! -f "$trans_png" ]; then
+    echo "[$i/${#TIMES[@]}] t=$t: skipping stack (a per-view render failed above)"
+    continue
+  fi
+
+  echo "[$i/${#TIMES[@]}] t=$t: stacking"
   docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd)":/workspace lbf3 bash -lc "
     set -e
     W=\$(for f in /workspace/$top_png /workspace/$lat_png /workspace/$xray_png /workspace/$trans_png; do
