@@ -1573,9 +1573,9 @@ def render_transverse(foam_file, time_value, output_png, output_pvsm):
                 label = f"x={sign}{abs(val):.2f} μm"  # user request, 2026-08-03 -- verified
                                                        # this Docker image's default font
                                                        # (DejaVu Sans) does render μ correctly
-                dx_chars = -10 if x_true_um < 0 else 11  # negative nudged 4 more chars left, user request, 2026-08-03
-                # x=+0.25 (positive) nudged 1 more char up than x=-0.25 (user request, 2026-08-03).
-                dy_chars = (6 if x_true_um < 0 else 4) - 2 + (0 if x_true_um < 0 else 1) + 2  # +2 more up, user request, 2026-08-03
+                # dx/dy in character units (positive dx = right, positive dy = up).
+                dx_chars = -10 if x_true_um < 0 else 9  # positive nudged 2 more chars left, user request, 2026-08-03
+                dy_chars = 5 if x_true_um < 0 else 3  # negative nudged 1 char down, positive nudged 2 more chars down, user request, 2026-08-03
                 add_text(x_true_um, z_window_min * 1e3 - 0.03, Y_MAX * 1e6 + 20, label,
                          dx_chars * char_pt, dy_chars * char_pt,
                          color=dark_color, fontsize=label_fontsize, ha='left', va='top')
