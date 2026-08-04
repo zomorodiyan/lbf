@@ -3,12 +3,21 @@
 
 Values match report/jul23-tasks.md / tutorials/laserbeamFoam/vdep/testrun57_vdep_mesh_test.
 
-Usage: plot_domain_schematic.py [laser_z_um] [time_label] [output_png]
+Usage: plot_domain_schematic.py [laser_z_um] [time_us] [output_png]
 All three are optional (defaults below) so this still runs standalone for a
 quick look. Called per-frame by render_view.py's render_transverse(), which
-passes the *actual* current laser z position and a time label for that
-frame -- the single beam/cylinder marker always reflects the specific
-timestep being rendered, not a fixed set of illustrative timestamps.
+passes the *actual* current laser z position and elapsed time (in
+microseconds, as a plain number) for that frame -- the single beam/cylinder
+marker always reflects the specific timestep being rendered, not a fixed
+set of illustrative timestamps.
+
+time_us is a bare number, not a pre-formatted "N μs" string -- this script
+appends its own "μs" suffix (below) rather than receiving one through argv,
+since this Docker image's pvpython (Python 3.6) encodes subprocess argv
+using the *caller's* own locale (ASCII/POSIX here), which raises
+UnicodeEncodeError on a μ character before the child process ever starts;
+building the suffix here, as a literal in this script's own source, sidesteps
+that entirely (user report, 2026-08-03).
 """
 import sys
 
@@ -32,7 +41,8 @@ TRACK_Z0, TRACK_Z1 = 500, 2900
 # being rendered (see module docstring). CLI overrides; defaults below let
 # this still run standalone.
 LASER_Z_UM = float(sys.argv[1]) if len(sys.argv) > 1 else TRACK_Z0
-TIME_LABEL = sys.argv[2] if len(sys.argv) > 2 else "0 us"
+TIME_US = sys.argv[2] if len(sys.argv) > 2 else "0"
+TIME_LABEL = f"{TIME_US} μs"  # was "us" -- user request, 2026-08-03
 OUTPUT_PNG = sys.argv[3] if len(sys.argv) > 3 else "results/domain_schematic.png"
 
 # The one deliberately-large font size (user request, 2026-08-02: "font's
@@ -43,7 +53,21 @@ OUTPUT_PNG = sys.argv[3] if len(sys.argv) > 3 else "results/domain_schematic.png
 TIME_FONTSIZE = 70
 
 fig = plt.figure(figsize=(30, 22))
-ax3d = fig.add_subplot(111, projection="3d")
+# add_axes([0,0,1,1]), not add_subplot(111) -- occupies the *entire* figure
+# canvas with no default matplotlib subplot margins, so this axes' own
+# pixel-box aspect ratio is exactly the figure's (30:22), a fixed, known
+# quantity. That matters because mplot3d stretches its rendered content
+# independently to fill whatever pixel box the axes occupies (no equal-
+# aspect enforcement), so a given 3D direction (e.g. the z/scan axis) only
+# renders at the *same on-screen slope* in two separate figures if their
+# axes boxes share the same pixel aspect ratio -- true here and in
+# proto_transverse_3d.py's own fig.add_axes([0,0,1,1]) (matched figsize
+# ratio, same reasoning), by user request, 2026-08-03: "modify the
+# schematic camera position ... so it matches that of the cross-section
+# plot ... I want them to be parallel". add_subplot(111)'s default margins
+# (further perturbed here by the tight_layout() call this replaces) were
+# never a reliably matching, known ratio.
+ax3d = fig.add_axes([0, 0, 1, 1], projection="3d")
 # mplot3d's automatic depth-sort picks one centroid depth per artist and can draw a
 # large translucent face after (on top of) a thin line that actually passes in front
 # of it for most of its length -- the classic "line behind glass" artifact. Disabling
@@ -78,6 +102,29 @@ def box_vertices(x0, x1, y0, y1, z0, z1):
 
 ALL_EDGES = [(0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), (6, 7), (7, 4),
              (0, 4), (1, 5), (2, 6), (3, 7)]
+
+
+def apply_box_aspect(ax, x0, x1, y0, y1, z0, z1, aspect):
+    """Set `ax`'s (already-plotted, i.e. x/z/y-remapped) view limits so its
+    3 axes render in the given relative proportions -- shared by the main
+    domain axes and the zoomed-inset axes below (both need this, just with
+    different true_ranges/aspect). See set_box_aspect's own call site
+    (below) for why the pre-3.3 workaround branch exists at all."""
+    if hasattr(ax, 'set_box_aspect'):  # matplotlib >=3.3 only -- this
+        ax.set_xlim3d(x0, x1)          # Docker image's pvpython has 3.1.1,
+        ax.set_ylim3d(y0, y1)          # doesn't have this
+        ax.set_zlim3d(z0, z1)
+        ax.set_box_aspect(aspect)
+        return
+    true_ranges = (x1 - x0, y1 - y0, z1 - z0)
+    centers = ((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2)
+    max_r = max(aspect)
+    spans = [t * max_r / r for t, r in zip(true_ranges, aspect)]
+    (sx0, sx1), (sy0, sy1), (sz0, sz1) = (
+        (c - s / 2, c + s / 2) for c, s in zip(centers, spans))
+    ax.set_xlim3d(sx0, sx1)
+    ax.set_ylim3d(sy0, sy1)
+    ax.set_zlim3d(sz0, sz1)
 
 
 def draw_box_wireframe(x0, x1, y0, y1, z0, z1, color, zorder_visible, zorder_hidden,
@@ -120,7 +167,10 @@ draw_box_wireframe(X0, X1, Y0, Y1, Z0, Z1, color="k", zorder_visible=25, zorder_
 # all -- "the edge of the plate is non-existent" (user report, 2026-08-02)
 # -- so it's drawn explicitly below.
 metal = [[remap(*pt) for pt in face] for face in box_faces(X0, X1, Y_SURF, Y1, Z0, Z1)]
-ax3d.add_collection3d(Poly3DCollection(metal, facecolors="gray", edgecolors="none",
+# Light gray, was plain "gray" -- darker gray made the cross-section
+# outline rectangles (drawn on top, see the inset below) hard to pick out
+# against it (user request, 2026-08-03).
+ax3d.add_collection3d(Poly3DCollection(metal, facecolors="0.88", edgecolors="none",
                                         alpha=0.85, zorder=2))
 
 # Plate top-rim outline at y=Y_SURF -- draw_box_wireframe with y0=y1=Y_SURF
@@ -138,33 +188,52 @@ ax3d.add_collection3d(Poly3DCollection(metal, facecolors="gray", edgecolors="non
 draw_box_wireframe(X0, X1, Y_SURF, Y_SURF, Z0, Z1, color=(0.25, 0.25, 0.25), zorder_visible=25, zorder_hidden=1,
                     linewidth=5.0)
 
-# Cross-section cut-line markers, matching render_view.py's transverse
-# panels (OFFSETS_BEHIND_LASER behind the laser, colored via
-# GM_RIM_COLORS) -- duplicated here rather than imported (same "small
-# constants duplicated across each standalone pvpython script" convention
-# already noted in render_view.py's own top_screenshot comment; keep in
-# sync by hand if either changes). Each cut is drawn as an L-shape: along
-# the plate's top surface (spanning the full x width) and down the visible
-# x=X1 side face (spanning the plate's own solid depth, Y_SURF->Y1) at
-# that cut's z -- user request, 2026-08-02 ("add cross-section lines to
-# the schematic ... on the plate's top surface and the x=0.32 surface of
-# the plate"). x=X1 (not X0) because that's this view's visible/front
-# face -- draw_box_wireframe's own is_hidden() already treats x=X0 as the
-# hidden far side for this view angle.
-OFFSETS_BEHIND_LASER_UM = [700, 600, 500]
-GM_RIM_COLORS = [(0.0, 1.0, 1.0), (0.0, 0.8, 0.0), (1.0, 1.0, 0.0)]
-for _offset_um, _color in zip(OFFSETS_BEHIND_LASER_UM, GM_RIM_COLORS):
-    _z_cut = LASER_Z_UM - _offset_um
-    if not (Z0 <= _z_cut <= Z1):
-        continue
-    _top0 = remap(X0, Y_SURF, _z_cut)
-    _top1 = remap(X1, Y_SURF, _z_cut)
-    ax3d.plot([_top0[0], _top1[0]], [_top0[1], _top1[1]], [_top0[2], _top1[2]],
-              color=_color, linewidth=4, zorder=15)
-    _side0 = remap(X1, Y_SURF, _z_cut)
-    _side1 = remap(X1, Y1, _z_cut)
-    ax3d.plot([_side0[0], _side1[0]], [_side0[1], _side1[1]], [_side0[2], _side1[2]],
-              color=_color, linewidth=4, zorder=15)
+# Cross-section window markers, matching render_view.py's transverse overlay
+# (X_CROSS_SECTIONS, colored via CROSS_SECTION_COLORS) -- duplicated here
+# rather than imported (same "small constants duplicated across each
+# standalone pvpython script" convention already noted in render_view.py's
+# own top_screenshot comment; keep in sync by hand if either changes).
+# Redesigned 2026-08-03 (from the old distance-behind-laser z-cut
+# "L-shape" markers, spanning the full plate) to match render_transverse's
+# X-based cross-sections: each is now a small rectangular window (not
+# a full-width/full-depth line) at a fixed x, spanning the shared y/z crop
+# window used by every cross-section -- drawn as a wireframe rectangle
+# lying in the plane normal to x at that x position. Reduced from 5 back
+# to 3 positions same-day (user request, 2026-08-03) -- the middle 3 of
+# the earlier 5-position set (+-250um came back empty at every timestep
+# tested: the surface never reaches that far off-center within the shared
+# y=[250,350]um window). Z is a *fixed* absolute window
+# (Z_WINDOW_MIN_UM/MAX_UM), not laser-relative, so these markers stay put
+# across an entire batch of frames regardless of the laser's own (still
+# separately drawn) position.
+X_CROSS_SECTIONS_UM = [-25, 0, 25]
+Z_WINDOW_MIN_UM, Z_WINDOW_MAX_UM = 1500, 2000
+Y_MIN_UM, Y_MAX_UM = 225, 350
+CROSS_SECTION_COLORS = [
+    (0.85, 0.10, 0.10),  # -25um red
+    (0.10, 0.60, 0.10),  #   0um green
+    (0.10, 0.45, 0.90),  # +25um blue
+]
+MARKER_PTS_3D = []  # every marker corner (remapped) -- the tiny markers
+                     # used to be drawn directly in the main scene here, but
+                     # at the domain's own scale they were an illegible
+                     # smudge (user report, 2026-08-03, see Media.jpg: a
+                     # hand-drawn sketch of a callout box zooming in on this
+                     # cluster instead). Per user follow-up, the tiny
+                     # in-place markers are no longer drawn at all -- only
+                     # their corner points are kept, to place the callout
+                     # rectangle and zoomed inset below at the right spot.
+for _x_cut, _color in zip(X_CROSS_SECTIONS_UM, CROSS_SECTION_COLORS):
+    _z0 = max(Z0, min(Z1, Z_WINDOW_MIN_UM))
+    _z1 = max(Z0, min(Z1, Z_WINDOW_MAX_UM))
+    if _z0 >= _z1:
+        continue  # window not within the domain (shouldn't happen; fixed values)
+    _corners = [
+        (_x_cut, Y_MIN_UM, _z0), (_x_cut, Y_MIN_UM, _z1),
+        (_x_cut, Y_MAX_UM, _z1), (_x_cut, Y_MAX_UM, _z0),
+        (_x_cut, Y_MIN_UM, _z0),
+    ]
+    MARKER_PTS_3D.extend(remap(*pt) for pt in _corners)
 
 # Laser track line along the surface (active portion) -- no longer
 # extended to the domain edges in black (removed, user request,
@@ -284,36 +353,12 @@ ax3d.yaxis.line.set_visible(False)
 ax3d.zaxis.line.set_visible(False)
 
 # true mm ratios make this an unreadable sliver (scan extent is ~5x the other two) -- compress it
-BOX_ASPECT = (X1 - X0, (Z1 - Z0) / 3.0, Y1 - Y0)
-if hasattr(ax3d, 'set_box_aspect'):  # matplotlib >=3.3 only -- this Docker
-    ax3d.set_box_aspect(BOX_ASPECT)  # image's pvpython has 3.1.1, doesn't have this
-else:
-    # Pre-3.3 workaround: without set_box_aspect, mplot3d maps each axis's
-    # own view-limit *span* to the same on-screen cube edge regardless of
-    # its actual data range -- so all 3 axes default to looking equal-sized
-    # (confirmed by testing: the box rendered as a plain cube here, visibly
-    # different from the intended elongated-in-z proportions -- user-
-    # flagged, 2026-08-02, "don't change the dimensions of the cube").
-    # Faking the same box_aspect ratios is possible by *padding* each
-    # axis's view limits (not touching any plotted data) beyond its true
-    # data range: an axis padded to span S instead of its true range T
-    # occupies only T/S of its own cube edge, so choosing per-axis padding
-    # ratios that match BOX_ASPECT reproduces the same relative on-screen
-    # proportions. The axis with the single largest BOX_ASPECT value needs
-    # zero padding (it already IS the longest edge); the other two get
-    # padded up to match it. Derivation: for target ratio R_i and true
-    # range T_i, span S_i = T_i * max(R)/R_i keeps (T_i/S_i) proportional
-    # to R_i for every axis, and is always >= T_i (a valid, non-clipping
-    # span) since max(R)/R_i >= 1.
-    true_ranges = (X1 - X0, Z1 - Z0, Y1 - Y0)
-    centers = ((X0 + X1) / 2, (Z0 + Z1) / 2, (Y0 + Y1) / 2)
-    max_r = max(BOX_ASPECT)
-    spans = [t * max_r / r for t, r in zip(true_ranges, BOX_ASPECT)]
-    (sx0, sx1), (sy0, sy1), (sz0, sz1) = (
-        (c - s / 2, c + s / 2) for c, s in zip(centers, spans))
-    ax3d.set_xlim3d(sx0, sx1)
-    ax3d.set_ylim3d(sy0, sy1)
-    ax3d.set_zlim3d(sz0, sz1)
+# (Pre-3.3 fallback: without set_box_aspect, mplot3d maps each axis's own
+# view-limit *span* to the same on-screen cube edge regardless of its
+# actual data range -- so all 3 axes default to looking equal-sized
+# unless the view limits are padded to fake the target ratios -- see
+# apply_box_aspect()'s own docstring.)
+apply_box_aspect(ax3d, X0, X1, Z0, Z1, Y0, Y1, (X1 - X0, (Z1 - Z0) / 3.0, Y1 - Y0))
 ax3d.invert_zaxis()  # y=0 (atmosphere) at top, y=Y1 (substrate) at bottom, visually
 ax3d.xaxis.pane.set_facecolor("white")
 ax3d.yaxis.pane.set_facecolor("white")
@@ -325,6 +370,117 @@ ax3d.view_init(elev=20, azim=-40)  # rotated around the (physical) y axis:
                                     # last two steps, user request,
                                     # 2026-08-02)
 
-fig.tight_layout()
+# Zoomed inset for the cross-section markers -- user request, 2026-08-03,
+# after sharing a hand-drawn sketch (Media.jpg) of a callout box zooming in
+# on this cluster, since at the domain's own scale the 3 markers are only
+# 50um apart across a 640um-wide, 3200um-long box and read as a tiny,
+# illegible smudge. A separate small 3D axes placed over that footprint
+# (found by projecting the markers' 3D corners through the now-final camera
+# transform), showing just the 3 cross-section planes as thin colored
+# outlines -- no fill/hatch and no border rectangle around the inset itself
+# (both dropped, user request, 2026-08-03: "simply colored outlines",
+# "remove the purple square") -- at a scale large enough to make out their
+# relative offset.
+from mpl_toolkits.mplot3d import proj3d  # noqa: E402 (local import -- only
+                                          # needed here, at the bottom, once
+                                          # the main axes' projection is final)
+
+fig.canvas.draw()  # force a draw so transData/get_proj reflect the final
+                    # axes position (fixed at [0,0,1,1] now, but the camera
+                    # projection itself still needs a draw to settle)
+
+
+def project_to_fig_frac(pt3d):
+    """3D data coords (already x/z/y-remapped) -> figure-fraction (0-1)
+    coords, via the axes' current camera projection then its 2D transData."""
+    x2, y2, _ = proj3d.proj_transform(*pt3d, ax3d.get_proj())
+    disp = ax3d.transData.transform((x2, y2))
+    return fig.transFigure.inverted().transform(disp)
+
+
+_fig_pts = [project_to_fig_frac(pt) for pt in MARKER_PTS_3D]
+_fxs, _fys = zip(*_fig_pts)
+_marker_cx, _marker_cy = (min(_fxs) + max(_fxs)) / 2, (min(_fys) + max(_fys)) / 2
+
+# The callout/inset box is centered on the markers' own on-screen position
+# but drawn much bigger (a "magnifying glass held over the spot", per the
+# sketch) rather than tucked in an empty corner -- CALLOUT_W chosen to
+# comfortably fit 3 labeled swatch-sized planes while still clearly reading
+# as "zoomed in on that spot" rather than an unrelated separate panel.
+#
+# CALLOUT_H is *derived*, not a second free constant: a 3D Axes stretches
+# its own normalized projection independently to fill whatever *pixel* box
+# it occupies (no equal-aspect enforcement here), so two Axes3D objects
+# with the same view_init but *different* pixel-box aspect ratios render
+# the same 3D direction at two different on-screen slopes -- per-axis data
+# scaling (box_aspect/apply_box_aspect) never affects this, only the pixel
+# box shape does. That was why the inset's cross-section rectangles didn't
+# look parallel to the main scene's z-direction laser track (user report,
+# 2026-08-03): CALLOUT_W/CALLOUT_H (0.30/0.36) didn't match ax3d's own
+# actual (post-tight_layout) box aspect. Matching it here -- computed from
+# ax3d.get_position() in inches, not hardcoded -- makes the two Axes3D
+# objects apply the *same* pixel stretch, so a given 3D direction (e.g.
+# physical z) lands at the same screen slope in both.
+_main_pos = ax3d.get_position()
+_fig_w_in, _fig_h_in = fig.get_size_inches()
+_main_aspect = (_main_pos.width * _fig_w_in) / (_main_pos.height * _fig_h_in)
+CALLOUT_W = 0.30
+CALLOUT_H = (CALLOUT_W * _fig_w_in) / (_main_aspect * _fig_h_in)
+callout_x0 = min(max(_marker_cx - CALLOUT_W / 2, 0.0), 1.0 - CALLOUT_W)
+callout_y0 = min(max(_marker_cy - CALLOUT_H / 2, 0.0), 1.0 - CALLOUT_H)
+
+ax_inset = fig.add_axes([callout_x0, callout_y0, CALLOUT_W, CALLOUT_H], projection="3d")
+ax_inset.computed_zorder = False
+ax_inset.patch.set_alpha(0)  # transparent background -- shows the main
+                              # scene through any part of the inset's own
+                              # (rectangular) bounding box not covered by
+                              # its 3D content, so it reads as an overlay,
+                              # not an opaque separate panel
+
+INSET_PAD_X, INSET_PAD_YZ = 15, 25  # um, headroom around the 3 planes'
+                                     # own bounding box so they don't touch
+                                     # the inset's own edge
+_ix0, _ix1 = min(X_CROSS_SECTIONS_UM) - INSET_PAD_X, max(X_CROSS_SECTIONS_UM) + INSET_PAD_X
+_iy0, _iy1 = Y_MIN_UM - INSET_PAD_YZ, Y_MAX_UM + INSET_PAD_YZ
+_iz0, _iz1 = Z_WINDOW_MIN_UM - INSET_PAD_YZ, Z_WINDOW_MAX_UM + INSET_PAD_YZ
+
+# Only the middle/green (x=0) cross-section frame -- user request,
+# 2026-08-03 -- at the same thickness as the laser track line (linewidth=
+# 4.5, see its own ax3d.plot call above) rather than this inset's old
+# linewidth=3.
+_x_cut, _color = 0.0, CROSS_SECTION_COLORS[1]
+_corners = [
+    remap(_x_cut, Y_MIN_UM, Z_WINDOW_MIN_UM),
+    remap(_x_cut, Y_MIN_UM, Z_WINDOW_MAX_UM),
+    remap(_x_cut, Y_MAX_UM, Z_WINDOW_MAX_UM),
+    remap(_x_cut, Y_MAX_UM, Z_WINDOW_MIN_UM),
+    remap(_x_cut, Y_MIN_UM, Z_WINDOW_MIN_UM),
+]
+_xs, _ys, _zs = zip(*_corners)
+ax_inset.plot(_xs, _ys, _zs, color=_color, linewidth=4.5)
+
+# True (uncompressed) local aspect ratios -- unlike the main box, this
+# region isn't dominated by the long scan axis, so no /3.0 fudge is needed;
+# the 3 planes' actual relative proportions are what we want visible here.
+# (Per-axis data scaling never changes an axis-aligned vector's *direction*,
+# only its length, so this ratio has no bearing on whether the inset's
+# z-direction edges look parallel to the main scene's laser track -- see
+# CALLOUT_W/CALLOUT_H below for what actually controls that.)
+apply_box_aspect(ax_inset, _ix0, _ix1, _iz0, _iz1, _iy0, _iy1,
+                  (_ix1 - _ix0, _iz1 - _iz0, _iy1 - _iy0))
+ax_inset.invert_zaxis()
+ax_inset.set_xticks([])
+ax_inset.set_yticks([])
+ax_inset.set_zticks([])
+ax_inset.xaxis.line.set_visible(False)
+ax_inset.yaxis.line.set_visible(False)
+ax_inset.zaxis.line.set_visible(False)
+ax_inset.xaxis.pane.set_visible(False)
+ax_inset.yaxis.pane.set_visible(False)
+ax_inset.zaxis.pane.set_visible(False)
+ax_inset.view_init(elev=20, azim=-40)  # same tilt as the main scene, so the
+                                        # zoomed planes read as the same
+                                        # 3D objects, just enlarged
+
 fig.savefig(OUTPUT_PNG, dpi=160)
 print(f"wrote {OUTPUT_PNG}")

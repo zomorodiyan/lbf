@@ -120,14 +120,10 @@ for t in "${TIMES[@]}"; do
 
   # Order: top, transverse, lateral, xray. Colorbars are embedded inside
   # top_png/lat_png already (render_view.py's _save_colorbar()), so this is
-  # just a straight 4-input vstack now -- no separate legend row to build.
-  # transverse's bottom 20% is cropped off first (user request, 2026-08-02,
-  # 10% -> 20%, "we need more cut-off from bottom of the transverse cross
-  # section views") -- applied only for this stacked composite, not to the
-  # standalone demo_*_transverse.png file itself. render_view.py's
-  # render_transverse keeps its own colorbar bottom_margin_frac comfortably
-  # above this fraction so the bar isn't cut off by it -- keep the two in
-  # sync if either changes.
+  # just a straight 4-input vstack -- no separate legend row to build, and
+  # no per-panel cropping (the old transverse bottom-20% crop was dropped,
+  # user request, 2026-08-03: no longer needed now that render_transverse's
+  # own framing/margins are tuned directly).
   docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd)":/workspace lbf3 bash -lc "
     set -e
     W=\$(for f in /workspace/$top_png /workspace/$lat_png /workspace/$xray_png /workspace/$trans_png; do
@@ -138,7 +134,7 @@ for t in "${TIMES[@]}"; do
       -i /workspace/$trans_png \
       -i /workspace/$lat_png \
       -i /workspace/$xray_png \
-      -filter_complex \"[0:v]scale=\${W}:-2[v0];[1:v]crop=iw:ih*0.8:0:0,scale=\${W}:-2[v1];[2:v]scale=\${W}:-2[v2];[3:v]scale=\${W}:-2[v3];[v0][v1][v2][v3]vstack=inputs=4\" \
+      -filter_complex \"[0:v]scale=\${W}:-2[v0];[1:v]scale=\${W}:-2[v1];[2:v]scale=\${W}:-2[v2];[3:v]scale=\${W}:-2[v3];[v0][v1][v2][v3]vstack=inputs=4\" \
       /workspace/$stacked_png -loglevel error
   " > /tmp/stackvid_stack_${PREFIX}_${t}.log 2>&1 || { echo "  stacking FAILED (see /tmp/stackvid_stack_${PREFIX}_${t}.log)"; continue; }
 done
