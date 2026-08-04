@@ -21,9 +21,8 @@
 # in here anyway for one consistent entry point across all four views, per
 # the original request -- render_xray() just doesn't call any of the
 # ParaView-render-specific shared helpers (_overlay_colorbar,
-# _trim_side_whitespace, _trim_vertical_whitespace,
-# _draw_cross_section_markers_top/_draw_cross_section_frame_lateral)
-# the other three do.
+# _draw_cross_section_markers_top/_draw_cross_section_frame_lateral) the
+# other three do.
 #
 # Colorbars (top/lateral/transverse -- xray never had one) are rendered
 # narrow, with a transparent background, and alpha-composited directly onto
@@ -371,10 +370,9 @@ def _overlay_colorbar(ctf, title, output_png, custom_labels=None,
     side='left'/vert='bottom' for older placements), overlapping the
     actual content there -- not appended
     below (which would grow the canvas) and not a separate legend file
-    included via some other composition step. Call *after*
-    _trim_side_whitespace()/_trim_vertical_whitespace() (and, for
-    render_transverse, after the schematic prepend) so output_png's width
-    is already final.
+    included via some other composition step. Call *after* SaveScreenshot
+    (and, for render_transverse, after the schematic prepend) so
+    output_png's width is already final.
 
     cb_height default (None) is computed as a fraction of output_png's own
     width (vw) rather than a fixed pixel count, and the bar/title font
@@ -545,175 +543,28 @@ def _overlay_colorbar(ctf, title, output_png, custom_labels=None,
     log(f"Overlaid colorbar onto: {output_png}")
 
 
-def _trim_side_whitespace(output_png):
-    """Crop the *saved image* down to its actual content column range.
-
-    The z-window is fixed across an entire batch of frames on purpose
-    (consistent framing so frames stay comparable), which means an early
-    frame with a short track has a lot of blank space to the right of it --
-    trim that off as a final step rather than shrinking the camera window
-    per-frame (which would break the shared framing). Frames end up not
-    pixel-aligned/same-width across a batch -- trades that away for no
-    wasted side space.
-
-    "Content" can't just mean "any non-white pixel": the untouched flat
-    plate/powder bed is colored the same as the real track, and its edge-on
-    silhouette is a real, non-white pixel row spanning the *entire*
-    z-window regardless of how much track exists yet -- a naive non-white
-    check never trims anything. Requiring a minimum vertical run of
-    non-white pixels per column ignores that 1px-tall line while still
-    keeping real geometry (many pixels tall).
-    """
-    img = mpimg.imread(output_png)
-    bounds = _content_col_bounds(img)
-    if bounds:
-        cmin, cmax = bounds
-        mpimg.imsave(output_png, img[:, cmin:cmax + 1])
-        log(f"Trimmed side whitespace: kept columns [{cmin},{cmax}] of {img.shape[1]}")
-    else:
-        log("No content found for side-trim; skipping")
-
-
-def _content_col_bounds(img, min_col_height_px=5, pad=15):
-    """Bounds-only half of _trim_side_whitespace's logic (see its own
-    docstring for why a minimum-column-content-height check is needed
-    instead of a naive non-white test) -- returns (cmin, cmax) or None,
-    without touching any file. Split out so
-    _trim_side_whitespace_excluding_markers can compute bounds from one
-    rendered image and apply them to a different one."""
-    non_white = np.any(img[:, :, :3] < 0.98, axis=2)
-    content_cols = np.count_nonzero(non_white, axis=0) >= min_col_height_px
-    if not content_cols.any():
-        return None
-    cmin, cmax = np.where(content_cols)[0][[0, -1]]
-    cmin = max(0, cmin - pad)
-    cmax = min(img.shape[1] - 1, cmax + pad)
-    return cmin, cmax
-
-
-def _trim_side_whitespace_excluding_markers(view, output_png, marker_disps):
-    """Like _trim_side_whitespace, but the crop bounds are computed from a
-    version of the scene with the transverse-cut marker lines hidden, so
-    those full-crop-height lines don't pull the kept-column range out to
-    wherever they land -- e.g. past the real track's own extent early in a
-    scan (user-reported, 2026-08-02: "affecting the range that is viewed
-    ... not desirable"). Renders twice: once (markers hidden) purely to
-    measure bounds, once (markers shown, the real output) to actually
-    save -- output_png always ends up as the marker-inclusive render, just
-    cropped using the marker-free bounds instead of its own.
-    """
-    for d in marker_disps:
-        d.Visibility = 0
-    Render(view)
-    SaveScreenshot(output_png, view, ImageResolution=view.ViewSize)
-    bounds = _content_col_bounds(mpimg.imread(output_png))
-
-    for d in marker_disps:
-        d.Visibility = 1
-    Render(view)
-    SaveScreenshot(output_png, view, ImageResolution=view.ViewSize)
-
-    if bounds:
-        cmin, cmax = bounds
-        img = mpimg.imread(output_png)
-        mpimg.imsave(output_png, img[:, cmin:cmax + 1])
-        log(f"Trimmed side whitespace (markers excluded from bounds): kept columns [{cmin},{cmax}]")
-    else:
-        log("No content found for side-trim; skipping")
-
-
-def _trim_vertical_whitespace(output_png):
-    """Crop the *saved image* down to its actual content row range.
-
-    FRAME_MARGIN deliberately zooms the camera out a bit so content doesn't
-    touch the frame's top/bottom edge (see each view's own camera comment),
-    which leaves a blank margin above and below the real crop-window
-    content -- trim it off. Unlike _trim_side_whitespace's column check, no
-    minimum-run-length trick is needed here: that trick exists because the
-    untouched flat plate's edge-on silhouette is a real (if 1px-tall) line
-    spanning the *entire* z-window horizontally, regardless of how much
-    track exists yet. There's no vertical equivalent -- the blank margin
-    here sits entirely *outside* the geometry's own crop box (Y_DEPTH_MIN/
-    MAX or X_LATERAL_MIN/MAX), so it's genuinely empty canvas, not a thin
-    sliver of real content to filter out.
-    """
-    img = mpimg.imread(output_png)
-    non_white = np.any(img[:, :, :3] < 0.98, axis=2)
-    content_rows = np.any(non_white, axis=1)
-    if content_rows.any():
-        rmin, rmax = np.where(content_rows)[0][[0, -1]]
-        pad = 10
-        rmin = max(0, rmin - pad)
-        rmax = min(img.shape[0] - 1, rmax + pad)
-        mpimg.imsave(output_png, img[rmin:rmax + 1, :])
-        log(f"Trimmed vertical whitespace: kept rows [{rmin},{rmax}] of {img.shape[0]}")
-    else:
-        log("No content found for vertical trim; skipping")
-
-
 def _clip_top_fraction(output_png, frac):
-    """Crop off the top `frac` (0-1) of the *already-trimmed* saved image --
-    used by render_lateral to cut the top 10% of gas headspace (user
-    request, 2026-08-02), independent of _trim_vertical_whitespace's own
-    blank-margin trim above."""
+    """Crop off the top `frac` (0-1) of the saved image -- used by
+    render_lateral to cut the top 10% of gas headspace (user request,
+    2026-08-02). Operates on the raw ParaView render directly (no
+    content-based trim happens before this any more, 2026-08-03 -- see
+    render_top's/render_lateral's own comments), so `frac` is always a
+    fraction of the same fixed height, giving a constant absolute pixel
+    crop on every frame."""
     img = mpimg.imread(output_png)
     cut = round(img.shape[0] * frac)
     mpimg.imsave(output_png, img[cut:, :])
     log(f"Clipped top {frac * 100:.0f}%: kept rows [{cut},{img.shape[0] - 1}]")
 
 
-def _pad_to_uniform_size(image_paths):
-    """Pad every given PNG (bottom and right edges, with opaque white) up to
-    the max width/height found across the whole batch, so all of them end
-    up exactly the same size.
-
-    Used (via --trim-batch, see main()) by _render_stacked_video.sh across
-    a whole batch of same-view images spanning every timestep of a case --
-    render_top/render_lateral/render_xray's own per-frame content trim
-    (_trim_side_whitespace*/_trim_vertical_whitespace) crops each frame to
-    *that frame's own* content extent, which for render_lateral genuinely
-    differs frame to frame (melt-pool/spatter depth changes over the scan),
-    leaving the stacked video with a different frame size at every timestep
-    (user-reported, 2026-08-03).
-
-    Padding, not a shared crop: an earlier version of this tried to compute
-    one shared union-of-content crop window and apply it to every image
-    (mirroring the old flat-transverse design's own same-frame multi-panel
-    helper, which needed a shared height to hstack cleanly) -- but by the
-    time this runs, each frame has *already* been independently trimmed to
-    its own content by the render_* call that produced it, so frame N's row
-    0 and frame M's row 0 no longer correspond to the same physical scene
-    position; naively slicing every image to one shared [rmin,rmax] range
-    silently clamps to whichever is smaller instead of aligning anything,
-    which does NOT reliably equalize size (verified empirically: 3 of 5 test
-    frames still came out different heights). Padding sidesteps the
-    alignment problem entirely -- each frame's own already-correct content
-    stays exactly as rendered, top/left-anchored, with white filling in
-    whatever's missing at the bottom/right to reach the batch's own max
-    extent, which is all "same final dimensions" actually requires.
-    """
-    imgs = [mpimg.imread(p) for p in image_paths]
-    max_h = max(img.shape[0] for img in imgs)
-    max_w = max(img.shape[1] for img in imgs)
-    for p, img in zip(image_paths, imgs):
-        h, w = img.shape[:2]
-        if h == max_h and w == max_w:
-            continue
-        channels = img.shape[2]
-        padded = np.ones((max_h, max_w, channels), dtype=img.dtype)
-        padded[:h, :w] = img
-        mpimg.imsave(p, padded)
-    log(f"Padded {len(image_paths)} frames to a uniform {max_w}x{max_h}")
-
-
 def _trim_whitespace_bbox(img, pad=8):
     """Crop `img` (RGB or RGBA array) to the bounding box of its non-white
-    content on *all four* sides at once -- unlike _trim_side_whitespace/
-    _trim_vertical_whitespace(_uniform) above, which each trim only one
-    axis for the ParaView-rendered views (where the other axis is already
-    tight or deliberately kept uniform across panels). Used for
-    domain_schematic.png, a standalone matplotlib figure with wide margins
-    on every side."""
+    content on *all four* sides at once. Used for render_transverse's own
+    matplotlib output and for domain_schematic.png -- both standalone
+    matplotlib figures with wide margins on every side and no fixed
+    ParaView-canvas equivalent to rely on instead (unlike
+    render_top/render_lateral, which just save the raw fixed-size render
+    directly -- see those functions' own comments, 2026-08-03)."""
     non_white = np.any(img[:, :, :3] < 0.98, axis=2)
     rows, cols = np.any(non_white, axis=1), np.any(non_white, axis=0)
     if not rows.any():
@@ -794,22 +645,12 @@ def _draw_cross_section_markers_top(view, y_marker, z_window_min, z_window_max):
     Z_VIEW_MIN/MAX crop) -- the lines mark where the transverse view's
     actual cut window sits, not the full top/lateral crop range (user
     request, 2026-08-03: previously spanned the full crop by mistake, a
-    leftover from the old distance-behind-laser markers which needed that
-    to defeat _content_col_bounds' min-column-height check -- no longer
-    relevant now that bounds are computed with markers hidden, see below).
+    leftover from the old distance-behind-laser markers).
 
     Flat-colored, not scalar-colored: ColorArrayName=['POINTS',''], not
     ColorBy(rep, None) -- the latter crashes when there's no array to
     default to (relevant here since these Line sources carry no data).
-
-    Returns the list of marker Show() displays, so callers can temporarily
-    hide them for bounds computation (see
-    _trim_side_whitespace_excluding_markers) -- necessary regardless of how
-    far these lines span, since it's their color/position, not their
-    length, that would otherwise get counted as "content" past the real
-    track's own extent early in a scan (user-reported, 2026-08-02).
     """
-    disps = []
     for x_cut, color in zip(CROSS_SECTION_X, CROSS_SECTION_MARKER_COLORS):
         marker = Line(Point1=[x_cut, y_marker, z_window_min], Point2=[x_cut, y_marker, z_window_max])
         disp = Show(marker, view)
@@ -820,8 +661,6 @@ def _draw_cross_section_markers_top(view, y_marker, z_window_min, z_window_max):
         disp.LineWidth = GM_RIM_LINE_WIDTH
         log(f"Cross-section marker: x={x_cut*1e6:+.1f}um -> line at y={y_marker*1e3:.3f}mm, "
             f"z=[{z_window_min*1e3:.3f},{z_window_max*1e3:.3f}]mm")
-        disps.append(disp)
-    return disps
 
 
 def _draw_cross_section_frame_lateral(view, x_marker):
@@ -836,9 +675,6 @@ def _draw_cross_section_frame_lateral(view, x_marker):
     exactly on top of each other -- the green (middle) one alone conveys
     where the transverse crop sits (user request, 2026-08-03: "show the
     green frame from the lateral view (not the xray)").
-
-    Returns the list of marker Show() displays, for the same reason
-    _draw_cross_section_markers_top does -- see its own docstring.
     """
     y0, y1 = CROSS_SECTION_Y_WINDOW
     z0, z1 = CROSS_SECTION_Z_WINDOW
@@ -858,7 +694,6 @@ def _draw_cross_section_frame_lateral(view, x_marker):
     disp.LineWidth = GM_RIM_LINE_WIDTH
     log(f"Cross-section frame: x=0 -> rect y=[{y0*1e3:.3f},{y1*1e3:.3f}]mm "
         f"z=[{z0*1e3:.3f},{z1*1e3:.3f}]mm at x={x_marker*1e3:.3f}mm")
-    return [disp]
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -962,7 +797,7 @@ def render_top(foam_file, time_value, output_png, output_pvsm):
     ]
 
     y_marker = ymin - 0.02 * (ymax - ymin)
-    marker_disps = _draw_cross_section_markers_top(view, y_marker, *CROSS_SECTION_Z_WINDOW)
+    _draw_cross_section_markers_top(view, y_marker, *CROSS_SECTION_Z_WINDOW)
 
     # Laser center-position marker at the laser's actual current (x, z),
     # same orange as the beam/landing marker in plot_domain_schematic.py
@@ -1023,8 +858,17 @@ def render_top(foam_file, time_value, output_png, output_pvsm):
     SaveScreenshot(output_png, view, ImageResolution=view.ViewSize)
     log(f"Saved: {output_png}")
 
-    _trim_side_whitespace_excluding_markers(view, output_png, marker_disps)
-    _trim_vertical_whitespace(output_png)
+    # No content-based crop here (deliberately, 2026-08-03 -- see this
+    # view's own header comment: view.ViewSize above is a function of fixed
+    # constants only, so the raw render is already exactly the same pixel
+    # size on every timestep. An earlier version cropped this down to
+    # whatever pixels happened to be non-blank, which sounds harmless but
+    # makes the *saved file's* size track incidental content -- how far the
+    # established track/powder bed happens to extend, spatter droplets,
+    # where the laser physically is right now -- none of which should be
+    # able to change what "the view" is. Traded a small amount of constant
+    # blank margin (FRAME_MARGIN already zooms out for this) for dimensions
+    # that only ever depend on the fixed crop window, never on the data.
     _overlay_colorbar(ctf, 'y (mm)', output_png, custom_labels=[-0.1, 0.0, 0.1])
 
     if output_pvsm:
@@ -1225,7 +1069,7 @@ def render_lateral(foam_file, time_value, output_png, output_pvsm):
     ls_liquidus_outline_disp.DiffuseColor = LS_LIQUIDUS_COLOR
     ls_liquidus_outline_disp.LineWidth = LS_LINE_WIDTH
 
-    marker_disps = _draw_cross_section_frame_lateral(view, x_marker)
+    _draw_cross_section_frame_lateral(view, x_marker)
 
     # Camera: looking down +x, up = -y so atmosphere is "up" in the frame.
     view.CameraParallelProjection = 1
@@ -1238,8 +1082,15 @@ def render_lateral(foam_file, time_value, output_png, output_pvsm):
     SaveScreenshot(output_png, view, ImageResolution=view.ViewSize)
     log(f"Saved: {output_png}")
 
-    _trim_side_whitespace_excluding_markers(view, output_png, marker_disps)
-    _trim_vertical_whitespace(output_png)
+    # No content-based crop here (see render_top's own comment on the same
+    # change, 2026-08-03) -- view.ViewSize is a function of fixed constants
+    # only, so skipping it means the saved file's dimensions can never
+    # depend on melt-pool depth, spatter, or where the laser physically is.
+    # _clip_top_fraction below is unaffected by this -- it's already a
+    # fixed *fraction* of whatever height gets passed in, and that height
+    # is now itself constant, so the absolute pixel crop it applies is
+    # constant too (previously it wasn't, since it ran on the
+    # already-content-cropped, variable-height image).
     _clip_top_fraction(output_png, 0.10)
     _overlay_colorbar(ctf, 'x (mm)', output_png, custom_labels=[-0.1, 0.0, 0.1])
 
@@ -2390,27 +2241,12 @@ def render_xray(foam_file, time_value, output_png):
 def main():
     parser = argparse.ArgumentParser(
         description="Render one of the four VDEP power-sweep post-processing views.")
-    parser.add_argument('--view', choices=['top', 'lateral', 'xray', 'transverse'])
-    parser.add_argument('--trim-batch', nargs='+', metavar='PNG',
-                         help="Skip rendering: pad all given PNGs (bottom/right, opaque white) "
-                              "up to the batch's own max width/height so every one ends up the "
-                              "same size -- see _pad_to_uniform_size's own docstring. Used by "
-                              "_render_stacked_video.sh across one view's full time series, "
-                              "after rendering every timestep and before stacking.")
-    parser.add_argument('case_foam', nargs='?')
-    parser.add_argument('time', type=float, nargs='?')
-    parser.add_argument('output_png', nargs='?')
+    parser.add_argument('--view', required=True, choices=['top', 'lateral', 'xray', 'transverse'])
+    parser.add_argument('case_foam')
+    parser.add_argument('time', type=float)
+    parser.add_argument('output_png')
     parser.add_argument('output_pvsm', nargs='?', default=None)
     args = parser.parse_args()
-
-    if args.trim_batch:
-        _pad_to_uniform_size(args.trim_batch)
-        return
-
-    if not args.view:
-        parser.error("--view is required unless --trim-batch is given")
-    if not (args.case_foam and args.time is not None and args.output_png):
-        parser.error("case_foam, time, and output_png are required unless --trim-batch is given")
 
     if args.view == 'top':
         render_top(args.case_foam, args.time, args.output_png, args.output_pvsm)
