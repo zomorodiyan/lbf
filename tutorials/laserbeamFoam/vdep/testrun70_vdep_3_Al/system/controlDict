@@ -67,6 +67,7 @@ functions
         fields          ( alpha.metal );
         operation       volIntegrate;
         regionType      all;
+        writeFields     false;
         writeControl    writeTime;
     }
 }

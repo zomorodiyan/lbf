@@ -110,10 +110,13 @@ Repeat for each of testrun68/69/70:
            fields        ( alpha.metal );
            operation     volIntegrate;
            regionType    all;
+           writeFields   false;
            writeControl  writeTime;
        }
    }
    ```
+   `writeFields` is mandatory for this function object in OpenFOAM v2506 — omitting it is a
+   `FOAM FATAL IO ERROR` at the very start of the run (confirmed the hard way on testrun69).
 
 5. **Apply the one remedy-specific change** — see below.
 

@@ -135,5 +135,12 @@ hardware. See [report/radius_flavour_comparison.png](report/radius_flavour_compa
 ## Open items
 
 - Task 1 fully done and confirmed (2026-08-04) — passed, see result above.
-- Tasks 2-4 parameter values are locked; case setup (forking testrun61, decomposing at 750W,
-  adding the `volIntegrate` functionObject) has not started.
+- **testrun69** (surface tension, Task 3) — case set up (testrun64 template + testrun61 seed
+  hand-off, `sigma`→0.95, mass-conservation monitor added) and **running** as of 2026-08-04.
+  Note: the `volFieldValue` functionObject needs an explicit `writeFields false;` entry in this
+  OpenFOAM version — omitted originally, caused an immediate `FOAM FATAL IO ERROR`; fixed in both
+  testrun69 and the pushed testrun70 config, and in `vdep_remedy_sims.md`'s template.
+- **testrun68** (recoil pressure cap, Task 2) — not started; still needs the one-time `Tcap`
+  solver change + separate `lbf3-tcap` image build (see `vdep_remedy_sims.md`).
+- **testrun70** (beam quality, Task 4) — config pushed for Zixun; needs his local testrun61 seed
+  hand-off before it can run (see `vdep_remedy_sims.md` and the case's own `README.md`).
