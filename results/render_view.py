@@ -229,6 +229,13 @@ def _load_laser_rays(case_dir, time_value):
         return None
     with open(series_path) as f:
         series = json.load(f)
+    if not series.get('files'):
+        # Stale series file (empty "files" list) -- happens after any
+        # pause/resume until tutorials/laserbeamFoam/fix_vtk_series.py is
+        # rerun (see CLAUDE.md). Same "no ray data available" outcome as the
+        # file not existing at all -- degrade gracefully rather than crash
+        # the whole render on min() over an empty sequence.
+        return None
     best = min(series['files'], key=lambda e: abs(e['time'] - time_value))
     vtk_path = os.path.join(case_dir, 'VTKs', best['name'])
 
