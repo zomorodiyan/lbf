@@ -43,18 +43,17 @@ DT_BLACK="fontsize=40:fontcolor=black:x=70:y=40"
 # "Top view".
 DT_TOPLABEL2="fontsize=48:fontcolor=black:x=260:y=40"
 
-# Timestamp: seconds -> microseconds, 2 decimal places, fontsize=80 (2x
-# DT_BLACK's 40). Top-right of the xray panel -- the only panel with no
-# colorbar and fully open space in that corner (top's own top-right
-# already holds its y-colorbar; cutaway's holds the overlapping x-colorbar).
+# Timestamp: seconds -> microseconds, 2 decimal places, fontsize=56 (was
+# 80 -- reduced 30%). Bottom-left of the top panel -- fully open space
+# there (the panel's own "Top view x down z right" label lives top-left).
 TIME_US=$(awk "BEGIN {printf \"%.2f\", ${TIME_S} * 1e6}")
-DT_TIME="fontsize=80:fontcolor=black:x=w-tw-20:y=40"
+DT_TIME="fontsize=56:fontcolor=black:x=70:y=h-th-20"
 
 ffmpeg -y -loglevel error -i "$TOP" -i "$CUT" -i "$XRAY" -i "$CUT_COLORBAR" \
   -filter_complex "
-    [0:v]scale=${W}:-2,drawtext=text='Top view  ':${DT_BLACK},drawtext=text='x ↓  z →':${DT_TOPLABEL2}[v0];
+    [0:v]scale=${W}:-2,drawtext=text='Top view  ':${DT_BLACK},drawtext=text='x ↓  z →':${DT_TOPLABEL2},drawtext=text='t = ${TIME_US} us':${DT_TIME}[v0];
     [1:v]scale=${W}:-2,drawtext=text='Lateral-Cutaway  x < -25um':${DT_BLACK}[v1];
-    [2:v]scale=${W}:-2,drawtext=text='Lateral-Attenuation':${DT_BLACK},drawtext=text='t = ${TIME_US} us':${DT_TIME}[v2];
+    [2:v]scale=${W}:-2,drawtext=text='Lateral-Attenuation':${DT_BLACK}[v2];
     [v0][v1][v2]vstack=inputs=3[stacked];
     [stacked][3:v]overlay=x=W-w-15:y=${H1}-${OVERLAP_PX}
   " \
