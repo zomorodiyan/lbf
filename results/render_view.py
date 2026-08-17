@@ -126,13 +126,27 @@ LS_LINE_WIDTH = 4.0           # wireframe line width (px) for those curves
 # redesign) -- top/lateral's markers had been silently stale ever since.
 CROSS_SECTION_X = [-25e-6, 0.0, 25e-6]         # m, matches render_transverse's own
 CROSS_SECTION_Z_WINDOW = (1.5e-3, 2.0e-3)      # m, fixed absolute z (not laser-relative)
-CROSS_SECTION_Y_WINDOW = (0.225e-3, 0.35e-3)   # m
+CROSS_SECTION_Y_WINDOW = (0.225e-3, 0.375e-3)  # m -- bottom (deeper) edge extended
+                               # 20% taller than the original 0.35e-3, top
+                               # (shallow) edge unchanged (user request,
+                               # 2026-08-11). Matches render_transverse's own
+                               # Y_MIN/Y_MAX -- keep in sync.
 CROSS_SECTION_MARKER_COLORS = [                # dark blue/green/red, matches
     [0.051, 0.278, 0.631],                       # render_transverse's own
     [0.145, 0.392, 0.157],                       # DARK_COLORS hexes
     [0.718, 0.110, 0.110],                       # (#0d47a1/#256428/#b71c1c)
 ]
 GM_RIM_LINE_WIDTH = 3.0       # wireframe line width (px) for those markers
+CBAR_MARGIN_MM = 0.025        # render_cutaway (mm): how far past its own
+                               # gradient transition bounds its colorbar's
+                               # *visual* range extends -- kept separate
+                               # from the much wider domain-derived range
+                               # used for actual data coloring, so the bar
+                               # itself isn't mostly flat blue/red with the
+                               # real gradient squeezed into a sliver (user
+                               # request, 2026-08-17). render_top uses its
+                               # own local CBAR_MARGIN_Y_MM (+-50um) instead
+                               # -- diverged from this one, same date.
 MELT_FRONT_OFFSET = 0.05e-3   # laser z + this = the melt-pool-boundary blue
                                # line's forward edge in render_xray (the
                                # crop window itself is now the shared fixed
@@ -365,7 +379,8 @@ def _find_bar_row_range(bar_img, opaque_frac_threshold=0.9):
 def _overlay_colorbar(ctf, title, output_png, custom_labels=None,
                        width_frac=0.35, cb_height=None, vert_margin=15,
                        side_margin=15, vert_margin_frac=None,
-                       down_shift_chars=0, side='right', vert='top'):
+                       down_shift_chars=0, side='right', vert='top',
+                       labels_above=False, skip_overlay=False):
     """Render ctf's colorbar *narrower* than the view (width_frac of its
     own already-trimmed width -- deliberately small, not spanning the
     image) and alpha-composite it onto the view image itself, near the
@@ -445,6 +460,22 @@ def _overlay_colorbar(ctf, title, output_png, custom_labels=None,
     nudges) -- positive always moves it further down; for vert='bottom'
     that also means less clearance from the bottom edge. User request,
     2026-08-02: "move the transverse colorbar image 2.5 characters down".
+
+    labels_above: put the tick value labels above the bar strip instead of
+    below (the default, used by every caller before render_cutaway) --
+    user request, 2026-08-17, for render_cutaway specifically. Only
+    affects the ScalarBar's own TextPosition; the title stays to the left
+    of the bar either way (see this function's own note on why above).
+
+    skip_overlay: save the standalone title+bar colorbar_png (as always),
+    but don't alpha-paste it onto output_png itself -- for render_cutaway
+    (user request, 2026-08-17): its colorbar is meant to visually overlap
+    into the *adjacent* panel above once stacked, which is impossible to
+    do from here (this function only ever sees output_png's own canvas,
+    and the panels don't get combined until the separate ffmpeg stacking
+    step). The stacking script instead overlays the saved standalone file
+    itself, positioned to straddle the seam between the two already-
+    stacked panels.
     """
     view_img = mpimg.imread(output_png)
     if view_img.shape[2] == 3:
@@ -485,9 +516,11 @@ def _overlay_colorbar(ctf, title, output_png, custom_labels=None,
     label_font_size = colorbar.LabelFontSize  # captured for down_shift_chars
                                                # below -- cb_view/colorbar
                                                # get Delete()d before then
-    # Tick value labels below the bar strip, not above it (the default) --
-    # user request, 2026-08-02.
-    colorbar.TextPosition = 'Ticks left/bottom, annotations right/top'
+    # Tick value labels below the bar strip by default, not above it (the
+    # ParaView default) -- user request, 2026-08-02. labels_above=True
+    # (render_cutaway only, 2026-08-17) flips this back to above.
+    colorbar.TextPosition = ('Ticks right/top, annotations left/bottom' if labels_above
+                              else 'Ticks left/bottom, annotations right/top')
     colorbar.WindowLocation = 'LowerCenter'
     colorbar.ScalarBarLength = 0.8
     if custom_labels is not None:
@@ -526,6 +559,12 @@ def _overlay_colorbar(ctf, title, output_png, custom_labels=None,
     _alpha_paste(combined, bar_img, tw + gap_px, round(y_bar))
     mpimg.imsave(colorbar_png, combined)
     log(f"Saved colorbar: {colorbar_png}")
+
+    if skip_overlay:
+        log(f"skip_overlay=True: left {output_png} untouched, standalone "
+            f"colorbar saved to {colorbar_png} for the caller to composite "
+            f"elsewhere")
+        return
 
     # Overlay: standard "over" alpha compositing onto whichever corner
     # side/vert select (top-right by default), in place -- the combined
@@ -639,32 +678,68 @@ def _resize_image(img, new_height):
 
 
 def _draw_cross_section_markers_top(view, y_marker, z_window_min, z_window_max):
-    """3 short line markers, one per CROSS_SECTION_X, each spanning
-    [z_window_min, z_window_max] at that fixed x, placed at y=y_marker --
-    nearer the camera than any real geometry (see render_top's own header),
-    so never occluded. Colored via CROSS_SECTION_MARKER_COLORS (dark
-    blue/green/red, matching render_transverse's own per-cut colors).
+    """Dashed line marker for CROSS_SECTION_X[0] (the -25um cut the
+    cutaway view uses), spanning [z_window_min, z_window_max] at that
+    fixed x, placed at y=y_marker -- nearer the camera than any real
+    geometry (see render_top's own header), so never occluded.
 
-    Callers pass CROSS_SECTION_Z_WINDOW here (not the view's own wider
-    Z_VIEW_MIN/MAX crop) -- the lines mark where the transverse view's
-    actual cut window sits, not the full top/lateral crop range (user
-    request, 2026-08-03: previously spanned the full crop by mistake, a
-    leftover from the old distance-behind-laser markers).
+    Black, dashed (user request, 2026-08-17, replacing the earlier solid
+    dark-blue marker -- "change the cross-section blue line to a better
+    representative... like a very professional article figure... this
+    line is defining the second view"): a dashed reference/cutting-plane
+    line is the standard convention in technical and scientific figures
+    for "this marks a section plane," distinct from a solid line (which
+    reads as a real geometric edge) -- and black stays legible against
+    the top view's own blue/purple/orange/red data coloring, where a blue
+    line would visually compete with it.
+
+    Built as many short, separate Line segments with gaps, not one
+    continuous line with a dash *style* applied -- ParaView's modern
+    (OpenGL2-era) rendering backend has no supported way to dash a
+    Wireframe line through the Show()/Representation API (line stippling
+    was a fixed-function-pipeline feature, dropped in the OpenGL2
+    rewrite; matches this file's own experience elsewhere, e.g.
+    render_lateral's outline lines are solid-only for the same reason).
+
+    Was 3 markers (one per CROSS_SECTION_X, spanning the narrower
+    CROSS_SECTION_Z_WINDOW) -- reduced to just this one, and extended to
+    the caller's full z-range instead (user request, 2026-08-16: drop the
+    x=0/+25um markers and the old narrow z-window, both leftovers from
+    render_transverse's old 3-cut design, which isn't what's being
+    cross-referenced here anymore -- extend the remaining line the full
+    z-range so it reads as "the plane the cutaway view cuts along").
+    render_top now calls this with Z_VIEW_MIN/MAX, not CROSS_SECTION_Z_WINDOW.
 
     Flat-colored, not scalar-colored: ColorArrayName=['POINTS',''], not
     ColorBy(rep, None) -- the latter crashes when there's no array to
     default to (relevant here since these Line sources carry no data).
     """
-    for x_cut, color in zip(CROSS_SECTION_X, CROSS_SECTION_MARKER_COLORS):
-        marker = Line(Point1=[x_cut, y_marker, z_window_min], Point2=[x_cut, y_marker, z_window_max])
+    x_cut = CROSS_SECTION_X[0]
+    DASH_COLOR = [0.0, 0.0, 0.0]
+    DASH_LEN_M = 0.06e-3
+    GAP_LEN_M = 0.04e-3
+    n_dashes = 0
+    z = z_window_min
+    while z < z_window_max:
+        z_end = min(z + DASH_LEN_M, z_window_max)
+        marker = Line(Point1=[x_cut, y_marker, z], Point2=[x_cut, y_marker, z_end])
         disp = Show(marker, view)
         disp.Representation = 'Wireframe'
         disp.ColorArrayName = ['POINTS', '']
-        disp.AmbientColor = color
-        disp.DiffuseColor = color
-        disp.LineWidth = GM_RIM_LINE_WIDTH
-        log(f"Cross-section marker: x={x_cut*1e6:+.1f}um -> line at y={y_marker*1e3:.3f}mm, "
-            f"z=[{z_window_min*1e3:.3f},{z_window_max*1e3:.3f}]mm")
+        disp.AmbientColor = DASH_COLOR
+        disp.DiffuseColor = DASH_COLOR
+        disp.LineWidth = GM_RIM_LINE_WIDTH * 2  # 2x the shared constant, just
+                                                 # for this marker (user
+                                                 # request, 2026-08-17) -- not
+                                                 # changed at its source, since
+                                                 # GM_RIM_LINE_WIDTH is also
+                                                 # used by
+                                                 # _draw_cross_section_frame_lateral,
+                                                 # which wasn't asked to change
+        z += DASH_LEN_M + GAP_LEN_M
+        n_dashes += 1
+    log(f"Cross-section marker: x={x_cut*1e6:+.1f}um -> {n_dashes} dashes at "
+        f"y={y_marker*1e3:.3f}mm, z=[{z_window_min*1e3:.3f},{z_window_max*1e3:.3f}]mm")
 
 
 def _draw_cross_section_frame_lateral(view, x_marker):
@@ -792,16 +867,27 @@ def render_top(foam_file, time_value, output_png, output_pvsm):
     # right around zero, the one place we most want blue/red clearly
     # separated.
     ymin_off, ymax_off = (ymin - SURFACE_Y) * 1e3, (ymax - SURFACE_Y) * 1e3
-    transition = 0.1  # width of the blue->red transition band (mm, was 100um)
+    # Explicit asymmetric transition bounds -- -100um to +200um (user
+    # request, 2026-08-17, replacing the earlier symmetric +-0.15mm
+    # attempt) -- close to the actual logged content bounds across several
+    # tr69 timesteps (roughly -0.08/-0.09mm spatter to +0.16/+0.17mm
+    # depression, see git history for that earlier attempt's own notes),
+    # rounded to clean numbers with a bit of margin on the depression side.
+    # y=0 (the true surface) is no longer exactly the transition's
+    # midpoint, so it won't render as pure white -- it lands about 1/3 of
+    # the way from blue to red instead. ymin_off/ymax_off (the true domain
+    # bounds) stay as the fully-saturated flat endpoints beyond this band.
+    TRANSITION_BLUE_MM = -0.100
+    TRANSITION_RED_MM = 0.100
     ctf.RGBPoints = [
-        ymin_off,    0.0, 0.0, 1.0,
-        -transition, 0.0, 0.0, 1.0,
-        transition,  1.0, 0.0, 0.0,
-        ymax_off,    1.0, 0.0, 0.0,
+        ymin_off,            0.0, 0.0, 1.0,
+        TRANSITION_BLUE_MM,  0.0, 0.0, 1.0,
+        TRANSITION_RED_MM,   1.0, 0.0, 0.0,
+        ymax_off,            1.0, 0.0, 0.0,
     ]
 
     y_marker = ymin - 0.02 * (ymax - ymin)
-    _draw_cross_section_markers_top(view, y_marker, *CROSS_SECTION_Z_WINDOW)
+    _draw_cross_section_markers_top(view, y_marker, Z_VIEW_MIN, Z_VIEW_MAX)
 
     # Laser center-position marker at the laser's actual current (x, z),
     # same orange as the beam/landing marker in plot_domain_schematic.py
@@ -873,7 +959,35 @@ def render_top(foam_file, time_value, output_png, output_pvsm):
     # able to change what "the view" is. Traded a small amount of constant
     # blank margin (FRAME_MARGIN already zooms out for this) for dimensions
     # that only ever depend on the fixed crop window, never on the data.
-    _overlay_colorbar(ctf, 'y (mm)', output_png, custom_labels=[-0.1, 0.0, 0.1])
+    #
+    # The colorbar's own visual range tracks the transition bounds, not
+    # the full domain-derived ymin_off/ymax_off `ctf` itself uses for
+    # actual data coloring (user request, 2026-08-17) -- otherwise the
+    # bar is mostly flat blue/red with the real gradient squeezed into a
+    # sliver. A separate CTF (never bound to any real Show()/ColorBy --
+    # GetScalarBar just reads its RGBPoints directly) keeps this purely
+    # cosmetic without touching how ycolor is actually colored.
+    #
+    # +-50um margin here, not the shared module-level CBAR_MARGIN_MM
+    # (+-25um, still used by render_cutaway's own colorbar) -- diverged
+    # per-view, user request, 2026-08-17.
+    #
+    # Labeled in um, not mm (user request, 2026-08-17) -- cbar_ctf is
+    # purely cosmetic (never bound to any real Show()/ColorBy, see above),
+    # so scaling its own RGBPoints/labels by 1000x here has no effect on
+    # how ycolor itself is actually colored (that still happens through
+    # the separate, untouched `ctf`, still in mm).
+    UM_PER_MM = 1000.0
+    CBAR_MARGIN_Y_MM = 0.050
+    cbar_ctf = GetColorTransferFunction(FIELD_COLOR + '_cbar_display')
+    cbar_ctf.RGBPoints = [
+        (TRANSITION_BLUE_MM - CBAR_MARGIN_Y_MM) * UM_PER_MM, 0.0, 0.0, 1.0,
+        TRANSITION_BLUE_MM * UM_PER_MM,                      0.0, 0.0, 1.0,
+        TRANSITION_RED_MM * UM_PER_MM,                       1.0, 0.0, 0.0,
+        (TRANSITION_RED_MM + CBAR_MARGIN_Y_MM) * UM_PER_MM,  1.0, 0.0, 0.0,
+    ]
+    _overlay_colorbar(cbar_ctf, 'y (μm)', output_png,
+                       custom_labels=[TRANSITION_BLUE_MM * UM_PER_MM, 0.0, TRANSITION_RED_MM * UM_PER_MM])
 
     if output_pvsm:
         SaveState(output_pvsm)
@@ -1153,11 +1267,28 @@ def render_transverse(foam_file, time_value, output_png, output_pvsm):
                                      # (was #27ae60/#2e7d32), user request,
                                      # 2026-08-03
     CROSS_SECTION_COLORS = LIGHT_COLORS  # kept as an alias -- used below
+    # Solidus/liquidus contour-line color, fixed across all 3 panels
+    # (user request, 2026-08-11: "#222 lines at the contourlines of
+    # T_solidus and T_liquidus") -- deliberately *not* the per-cut
+    # dark_color used for the gas/metal rim below: that one is hued per
+    # cross-section so the 3 panels stay identifiable, but solidus/liquidus
+    # are the same physical boundary drawn identically on all 3, so a
+    # single fixed dark gray reads as "one consistent overlay" rather than
+    # blending into whichever hue that panel's fill happens to use.
+    # Solidus solid, liquidus dashed (same dash pattern as the ghost-frame
+    # leader line below) so the two stay distinguishable at a glance
+    # despite sharing a color.
+    MELT_BOUNDARY_COLOR = '#222222'
+    MELT_BOUNDARY_LINE_WIDTH = 1.2
+    MELT_BOUNDARY_LIQUIDUS_DASH = (0, (3, 2))
     # z window (m), fixed in absolute z (not laser-relative) so cross-
     # sections stay comparable across an entire batch of timesteps.
     Z_WINDOW_MIN, Z_WINDOW_MAX = 1.5e-3, 2.0e-3
-    # y window (m), shared across all cross-sections.
-    Y_MIN, Y_MAX = 0.225e-3, 0.35e-3
+    # y window (m), shared across all cross-sections. Bottom (deeper) edge
+    # extended 20% taller than the original 0.35e-3, top (shallow) edge
+    # left unchanged (user request, 2026-08-11) -- matches the shared
+    # CROSS_SECTION_Y_WINDOW module constant above, keep in sync.
+    Y_MIN, Y_MAX = 0.225e-3, 0.375e-3
 
     # Camera angles -- tuned together with the user against
     # proto_transverse_3d.py; AZIMUTH_DEG is named (not inlined into
@@ -1216,17 +1347,23 @@ def render_transverse(foam_file, time_value, output_png, output_pvsm):
     gm_poly = servermanager.Fetch(gm_contour)
     log(f"Gas/metal surface: {gm_poly.GetNumberOfCells()} cells")
 
-    # Liquidus contour (dotted white overlay, user request, 2026-08-03),
-    # restricted to inside the metal first -- same Clip-then-Contour
-    # pattern render_lateral uses (see its own comment on why Clip, not
-    # Threshold). Solidus itself is never drawn as a curve -- it's only
-    # used below (per x-cut) to split the metal fill into solid/liquid.
+    # Solidus/liquidus contours (drawn per-cut below as #222222 overlay
+    # lines, user request, 2026-08-11), restricted to inside the metal
+    # first -- same Clip-then-Contour pattern render_lateral uses (see its
+    # own comment on why Clip, not Threshold).
     metal_only = Clip(Input=merged)
     metal_only.ClipType = None
     metal_only.Scalars = ['POINTS', FIELD_GM]
     metal_only.Value = ISO_THRESHOLD
     metal_only.Invert = 0
     metal_only.UpdatePipeline(time=time_value)
+
+    ls_solidus_contour = Contour(Input=metal_only)
+    ls_solidus_contour.ContourBy = ['POINTS', FIELD_LS]
+    ls_solidus_contour.Isosurfaces = [LS_TSOLIDUS]
+    ls_solidus_contour.UpdatePipeline(time=time_value)
+    ls_solidus_poly = servermanager.Fetch(ls_solidus_contour)
+    log(f"Solidus surface: {ls_solidus_poly.GetNumberOfCells()} cells")
 
     ls_liquidus_contour = Contour(Input=metal_only)
     ls_liquidus_contour.ContourBy = ['POINTS', FIELD_LS]
@@ -1468,14 +1605,28 @@ def render_transverse(foam_file, time_value, output_png, output_pvsm):
                 add_line([x_disp_um] * len(seg), seg[:, 2] * 1e3 + z_off_mm, seg[:, 1] * 1e6 + y_off_um,
                          color=dark_color, linewidth=1.0)
 
-            # Liquidus outline data -- extracted and logged, but not
-            # currently drawn (dotted white overlay disabled for now, see
-            # below -- user request, 2026-08-03).
+            # Solidus outline -- fixed #222222, solid line (see
+            # MELT_BOUNDARY_COLOR above for why not the per-cut dark_color).
+            solidus_rim = slice_at_x(ls_solidus_contour, x_cut)
+            solidus_rim_poly = servermanager.Fetch(solidus_rim)
+            solidus_segments = extract_polylines(solidus_rim_poly)
+            log(f"  Solidus outline: {len(solidus_segments)} segments "
+                f"(may be empty if no solid/mushy boundary straddles this x/window)")
+            for seg in solidus_segments:
+                add_line([x_disp_um] * len(seg), seg[:, 2] * 1e3 + z_off_mm, seg[:, 1] * 1e6 + y_off_um,
+                         color=MELT_BOUNDARY_COLOR, linewidth=MELT_BOUNDARY_LINE_WIDTH)
+
+            # Liquidus outline -- same fixed color, dashed to stay
+            # distinguishable from the solid solidus line above.
             liquidus_rim = slice_at_x(ls_liquidus_contour, x_cut)
             liquidus_rim_poly = servermanager.Fetch(liquidus_rim)
             liquidus_segments = extract_polylines(liquidus_rim_poly)
             log(f"  Liquidus outline: {len(liquidus_segments)} segments "
                 f"(may be empty if no liquid straddles this x/window)")
+            for seg in liquidus_segments:
+                add_line([x_disp_um] * len(seg), seg[:, 2] * 1e3 + z_off_mm, seg[:, 1] * 1e6 + y_off_um,
+                         color=MELT_BOUNDARY_COLOR, linewidth=MELT_BOUNDARY_LINE_WIDTH,
+                         linestyle=MELT_BOUNDARY_LIQUIDUS_DASH)
 
             # Metal-region fill, split into solid and liquid (user request,
             # 2026-08-03) -- slice the full field (not just the contour),
@@ -1720,6 +1871,375 @@ def render_transverse(foam_file, time_value, output_png, output_pvsm):
         # information directly.
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# --view=cutaway -- EXPERIMENTAL/PROTOTYPE, not part of the normal 4-view
+# pipeline or _render_stacked_video.sh. Exactly render_lateral's own
+# technique (gm_contour surface shell, colored by x_coord, camera looking
+# down +x) -- just with the visible x-range restricted to
+# [xmin, CUTAWAY_X_PLANE] instead of the full domain (user request,
+# 2026-08-16: "the same thing as the side view but with only the surface
+# that is x < -0.025"). Since render_lateral's own camera looks down the
+# x-axis from large +x toward -x, near-centerline material (higher x)
+# normally renders in front of, and can occlude, whatever sits farther
+# away (lower x -- including the vapor-depression cavity's own walls);
+# clipping that near-centerline slab away lets whatever surface remains at
+# x < CUTAWAY_X_PLANE show through unobstructed, with no new rendering
+# technique needed at all.
+#
+# CUTAWAY_X_PLANE = -0.025mm matches render_transverse's own "blue"
+# cross-section (X_CROSS_SECTIONS[0] = -25e-6) -- same cut plane, different
+# view. (An earlier version of this view used a much more elaborate
+# solid-volume half-domain clip at x=-0.25mm with an oblique camera --
+# abandoned after the first test render showed no melt reaches that far
+# off-centerline, and after the user clarified they actually wanted this
+# simpler render_lateral-based technique at the existing -0.025mm cut
+# instead.)
+#
+# Deliberately independent of render_transverse/render_lateral: separate
+# constants, separate function, no shared state -- neither is touched by
+# this addition.
+# ═════════════════════════════════════════════════════════════════════════
+def render_cutaway(foam_file, time_value, output_png, output_pvsm):
+    FIELD_COLOR = 'x_coord'
+    CUTAWAY_X_PLANE = -0.025e-3  # m -- matches render_transverse's existing
+                                  # "blue" cross-section (X_CROSS_SECTIONS[0])
+
+    reader = OpenFOAMReader(FileName=foam_file)
+    reader.CellArrays = [FIELD_GM, FIELD_LS]
+    reader.Createcelltopointfiltereddata = 1
+    reader.UpdatePipeline(time=time_value)
+    log("reader loaded")
+
+    merged = MergeBlocks(Input=reader)
+    merged.UpdatePipeline(time=time_value)
+    log("blocks merged")
+
+    bounds = merged.GetDataInformation().GetBounds()
+    xmin, xmax, ymin, ymax, zmin, zmax = bounds
+    log(f"Domain bounds: x=[{xmin},{xmax}] y=[{ymin},{ymax}] z=[{zmin},{zmax}]")
+
+    laser_table = _load_laser_time_vs_position(os.path.dirname(foam_file))
+    z_window_min, z_window_max = Z_VIEW_MIN, Z_VIEW_MAX
+    log(f"Fixed crop window: x<{CUTAWAY_X_PLANE * 1e3:.3f}mm "
+        f"y=[{Y_DEPTH_MIN * 1e3:.3f},{Y_DEPTH_MAX * 1e3:.3f}]mm "
+        f"z=[{z_window_min * 1e3:.3f},{z_window_max * 1e3:.3f}]mm")
+
+    laser_z = _laser_z_at(laser_table, time_value)
+    log(f"Laser z={laser_z * 1e3:.3f}mm at t={time_value}")
+
+    gm_contour = Contour(Input=merged)
+    gm_contour.ContourBy = ['POINTS', FIELD_GM]
+    gm_contour.Isosurfaces = [ISO_THRESHOLD]
+    gm_contour.UpdatePipeline(time=time_value)
+    gm_poly = servermanager.Fetch(gm_contour)
+    log(f"Gas/metal surface: {gm_poly.GetNumberOfCells()} cells")
+
+    # Mushy-zone surface, restricted to inside the metal first -- same
+    # Clip-then-Contour pattern render_lateral uses (see its own comment
+    # for why Clip, not Threshold).
+    metal_only = Clip(Input=merged)
+    metal_only.ClipType = None
+    metal_only.Scalars = ['POINTS', FIELD_GM]
+    metal_only.Value = ISO_THRESHOLD
+    metal_only.Invert = 0
+    metal_only.UpdatePipeline(time=time_value)
+
+    ls_contour = Contour(Input=metal_only)
+    ls_contour.ContourBy = ['POINTS', FIELD_LS]
+    ls_contour.Isosurfaces = [LS_TSOLIDUS]
+    ls_contour.UpdatePipeline(time=time_value)
+    ls_poly = servermanager.Fetch(ls_contour)
+    log(f"Mushy-zone (solidus) surface: {ls_poly.GetNumberOfCells()} cells")
+
+    ls_liquidus_contour = Contour(Input=metal_only)
+    ls_liquidus_contour.ContourBy = ['POINTS', FIELD_LS]
+    ls_liquidus_contour.Isosurfaces = [LS_TLIQUIDUS]
+    ls_liquidus_contour.UpdatePipeline(time=time_value)
+    ls_liquidus_poly = servermanager.Fetch(ls_liquidus_contour)
+    log(f"Mushy-zone (liquidus) surface: {ls_liquidus_poly.GetNumberOfCells()} cells")
+
+    # Melt-boundary outline at the cut plane itself, not x=0 -- x=0 sits
+    # well outside the kept x<CUTAWAY_X_PLANE region now, so an x=0
+    # outline would mark a location that isn't shown at all. Same
+    # Slice-then-box-clip pattern as render_lateral's own _outline_at_x0.
+    def _outline_at_cut(contour):
+        s = Slice(Input=contour)
+        s.SliceType = 'Plane'
+        s.SliceType.Origin = [CUTAWAY_X_PLANE, (Y_DEPTH_MIN + Y_DEPTH_MAX) / 2.0, (z_window_min + z_window_max) / 2.0]
+        s.SliceType.Normal = [1.0, 0.0, 0.0]
+        s.UpdatePipeline(time=time_value)
+        c = Clip(Input=s)
+        c.ClipType = 'Box'
+        c.ClipType.Position = [CUTAWAY_X_PLANE - 1e-6, Y_DEPTH_MIN, z_window_min]
+        c.ClipType.Length = [2e-6, Y_DEPTH_MAX - Y_DEPTH_MIN, z_window_max - z_window_min]
+        c.Invert = 1
+        c.UpdatePipeline(time=time_value)
+        return c
+
+    ls_slice_clip = _outline_at_cut(ls_contour)
+    ls_slice_poly = servermanager.Fetch(ls_slice_clip)
+    log(f"Solidus outline at x={CUTAWAY_X_PLANE * 1e3:.3f}mm: {ls_slice_poly.GetNumberOfCells()} cells "
+        f"(may be empty if no melt currently straddles this cut plane)")
+
+    ls_liquidus_slice_clip = _outline_at_cut(ls_liquidus_contour)
+    ls_liquidus_slice_poly = servermanager.Fetch(ls_liquidus_slice_clip)
+    log(f"Liquidus outline at x={CUTAWAY_X_PLANE * 1e3:.3f}mm: {ls_liquidus_slice_poly.GetNumberOfCells()} cells "
+        f"(may be empty if no melt currently straddles this cut plane)")
+
+    # Gas/metal boundary outline at the cut plane too (user request,
+    # 2026-08-16) -- same _outline_at_cut() helper, sourced from gm_contour
+    # (already built above for the main surface) instead of the ls_*
+    # contours.
+    gm_slice_clip = _outline_at_cut(gm_contour)
+    gm_slice_poly = servermanager.Fetch(gm_slice_clip)
+    log(f"Gas/metal outline at x={CUTAWAY_X_PLANE * 1e3:.3f}mm: {gm_slice_poly.GetNumberOfCells()} cells "
+        f"(may be empty if x<CUTAWAY_X_PLANE has no metal at all in this window)")
+
+    # Spatial crop: y/z fixed (shared window), x restricted to
+    # [xmin, CUTAWAY_X_PLANE] -- the one change from render_lateral's own
+    # feature clip, which uses the full [xmin,xmax] x-range instead.
+    feature = Clip(Input=gm_contour)
+    feature.ClipType = 'Box'
+    feature.ClipType.Position = [xmin, Y_DEPTH_MIN, z_window_min]
+    feature.ClipType.Length = [CUTAWAY_X_PLANE - xmin, Y_DEPTH_MAX - Y_DEPTH_MIN, z_window_max - z_window_min]
+    feature.Invert = 1
+    feature.UpdatePipeline(time=time_value)
+    feature_poly = servermanager.Fetch(feature)
+    log(f"Cropped feature: {feature_poly.GetNumberOfCells()} cells, "
+        f"bounds={feature.GetDataInformation().GetBounds()}")
+
+    xcolor = Calculator(Input=feature)
+    xcolor.AttributeType = 'Point Data'
+    xcolor.ResultArrayName = FIELD_COLOR
+    xcolor.Function = 'coordsX*1e3'  # meters -> mm
+    xcolor.UpdatePipeline(time=time_value)
+
+    y_center = (Y_DEPTH_MIN + Y_DEPTH_MAX) / 2.0
+    z_center = (z_window_min + z_window_max) / 2.0
+    x_center = (xmin + xmax) / 2.0
+
+    view = GetActiveViewOrCreate('RenderView')
+    view.OrientationAxesVisibility = 0
+    view.Background = [1, 1, 1]
+    view.ViewSize = [max(1, round(VIEW_HEIGHT_PX * (z_window_max - z_window_min) / (Y_DEPTH_MAX - Y_DEPTH_MIN))), VIEW_HEIGHT_PX]
+    view.ViewTime = time_value
+
+    disp = Show(xcolor, view)
+    disp.Representation = 'Surface'
+    ColorBy(disp, ('POINTS', FIELD_COLOR))
+    ctf = GetColorTransferFunction(FIELD_COLOR)
+    # Back to x (not render_top's y -- tried that, user request 2026-08-17:
+    # reverted) -- y duplicated exactly what the top panel already shows
+    # (height), adding no new information; x is the one dimension an
+    # orthographic side view otherwise flattens away entirely, so it's the
+    # more informative choice specifically for this panel.
+    #
+    # Explicit transition bounds -- -125um to -25um (user request,
+    # 2026-08-17 -- prior attempts: +-0.12mm fit-to-visible-range,
+    # -0.1/+0.05mm, -0.1/0.0mm). TRANSITION_RED_MM now lands exactly on
+    # CUTAWAY_X_PLANE (-25um), so the cut plane itself -- the reddest
+    # point actually reached -- is fully saturated red, using the whole
+    # blue->red range across the visible surface instead of stopping
+    # short of it. x_min_mm (the true domain edge) stays the
+    # fully-saturated flat blue endpoint; the outer red endpoint is a
+    # dummy value just past TRANSITION_RED_MM, purely so RGBPoints'
+    # values stay strictly increasing -- real data never goes past it.
+    x_min_mm = xmin * 1e3
+    TRANSITION_BLUE_MM = -0.125
+    TRANSITION_RED_MM = -0.025
+    ctf.RGBPoints = [
+        x_min_mm,                 0.0, 0.0, 1.0,
+        TRANSITION_BLUE_MM,       0.0, 0.0, 1.0,
+        TRANSITION_RED_MM,        1.0, 0.0, 0.0,
+        TRANSITION_RED_MM + 0.01, 1.0, 0.0, 0.0,
+    ]
+
+    # Still safely in front of the visible (x<CUTAWAY_X_PLANE) content --
+    # doesn't need to change just because the visible range shrank.
+    x_marker = xmax + 0.02 * (xmax - xmin)
+    # Outline curves render OUTLINE_FRONT_NUDGE closer to the camera than
+    # the fills below (larger x = closer, since the camera sits at large
+    # +x looking toward -x) so they draw crisply on top instead of
+    # z-fighting with the coincident fill surfaces.
+    OUTLINE_FRONT_NUDGE = 5e-6  # m
+
+    # Solid/mushy/liquid FILLED cross-section at the cut plane (user
+    # request, 2026-08-16) -- reuses render_transverse's own field_slice ->
+    # metal_clip -> clip_temp (3-way split by FIELD_LS) pipeline almost
+    # verbatim (this file, render_transverse's per-cut loop), just Show()n
+    # directly with a flat color per phase instead of being fetched into
+    # matplotlib polygons: this view is already real ParaView Show()/
+    # Render(), so that fits its own pipeline instead of bridging two
+    # different rendering techniques. Translated to x_marker like the
+    # outline curves, so it renders in front of the main (x-colored)
+    # surface -- wherever a phase is absent (e.g. gas/void reaching this
+    # far off-centerline), there's simply nothing drawn there, and the
+    # main surface shows through from behind.
+    # Neutral gray shades (user request, 2026-08-16 -- was red, was blue
+    # before that) -- no existing render_transverse hue family to borrow
+    # for gray, so these are hand-picked rather than duplicated from a
+    # module/local constant like the earlier color versions were. Mushy
+    # and liquid swapped from render_transverse's own light=solid/
+    # dark=mushy/medium=liquid convention (user request, 2026-08-17: make
+    # liquid darker than mushy) -- solid stays lightest, liquid is now
+    # darkest, mushy is the medium shade. Now that the outline curves
+    # above are pure black (LS_COLOR), all 3 shades sit comfortably
+    # lighter than the lines so the crisp black boundaries still read
+    # clearly on top of the fills.
+    SOLID_FILL_COLOR = [0.75, 0.75, 0.75]
+    MUSHY_FILL_COLOR = [0.55, 0.55, 0.55]
+    LIQUID_FILL_COLOR = [0.35, 0.35, 0.35]
+
+    field_slice = Slice(Input=merged)
+    field_slice.SliceType = 'Plane'
+    field_slice.SliceType.Origin = [CUTAWAY_X_PLANE, y_center, z_center]
+    field_slice.SliceType.Normal = [1.0, 0.0, 0.0]
+    field_slice.UpdatePipeline(time=time_value)
+
+    metal_clip = Clip(Input=field_slice)
+    metal_clip.ClipType = None
+    metal_clip.Scalars = ['POINTS', FIELD_GM]
+    metal_clip.Value = ISO_THRESHOLD
+    metal_clip.Invert = 0
+    metal_clip.UpdatePipeline(time=time_value)
+
+    def _clip_temp(input_poly, value, invert):
+        """One scalar Clip on FIELD_LS -- Invert=0 keeps T>=value, Invert=1
+        keeps T<value (same convention as the gas/metal clip above)."""
+        c = Clip(Input=input_poly)
+        c.ClipType = None
+        c.Scalars = ['POINTS', FIELD_LS]
+        c.Value = value
+        c.Invert = invert
+        c.UpdatePipeline(time=time_value)
+        return c
+
+    def _fill_at_cut(phase_result):
+        """Box-clip to the exact cut plane/y-z window (same bounds
+        _outline_at_cut uses), then translate to x_marker."""
+        c = Clip(Input=phase_result)
+        c.ClipType = 'Box'
+        c.ClipType.Position = [CUTAWAY_X_PLANE - 1e-6, Y_DEPTH_MIN, z_window_min]
+        c.ClipType.Length = [2e-6, Y_DEPTH_MAX - Y_DEPTH_MIN, z_window_max - z_window_min]
+        c.Invert = 1
+        c.UpdatePipeline(time=time_value)
+        t = Transform(Input=c)
+        t.Transform = 'Transform'
+        t.Transform.Translate = [x_marker, 0.0, 0.0]
+        t.UpdatePipeline(time=time_value)
+        return t
+
+    # solid: T<solidus. mushy: solidus<=T<liquidus (2 chained clips).
+    # liquid: T>=liquidus. Same 3-way split as render_transverse.
+    for phase_name, phase_color, phase_result in (
+        ('solid', SOLID_FILL_COLOR, _clip_temp(metal_clip, LS_TSOLIDUS, 1)),
+        ('mushy', MUSHY_FILL_COLOR, _clip_temp(_clip_temp(metal_clip, LS_TSOLIDUS, 0), LS_TLIQUIDUS, 1)),
+        ('liquid', LIQUID_FILL_COLOR, _clip_temp(metal_clip, LS_TLIQUIDUS, 0)),
+    ):
+        phase_final = _fill_at_cut(phase_result)
+        phase_poly = servermanager.Fetch(phase_final)
+        log(f"{phase_name.capitalize()} fill at x={CUTAWAY_X_PLANE * 1e3:.3f}mm: "
+            f"{phase_poly.GetNumberOfCells()} cells "
+            f"(may be empty if no {phase_name} metal straddles this cut plane)")
+        phase_disp = Show(phase_final, view)
+        phase_disp.Representation = 'Surface'
+        phase_disp.ColorArrayName = ['POINTS', '']
+        phase_disp.AmbientColor = phase_color
+        phase_disp.DiffuseColor = phase_color
+
+    ls_outline = Transform(Input=ls_slice_clip)
+    ls_outline.Transform = 'Transform'
+    ls_outline.Transform.Translate = [x_marker + OUTLINE_FRONT_NUDGE, 0.0, 0.0]
+    ls_outline.UpdatePipeline(time=time_value)
+    ls_outline_disp = Show(ls_outline, view)
+    ls_outline_disp.Representation = 'Wireframe'
+    ls_outline_disp.ColorArrayName = ['POINTS', '']
+    ls_outline_disp.AmbientColor = LS_COLOR
+    ls_outline_disp.DiffuseColor = LS_COLOR
+    ls_outline_disp.LineWidth = LS_LINE_WIDTH
+
+    # Liquidus now also LS_COLOR (black), not LS_LIQUIDUS_COLOR (gray) --
+    # user request, 2026-08-16: solidus and liquidus both black. The 3
+    # outline curves (gas/metal, solidus, liquidus) stay visually
+    # distinguishable by their different y-depths, not by color anymore.
+    ls_liquidus_outline = Transform(Input=ls_liquidus_slice_clip)
+    ls_liquidus_outline.Transform = 'Transform'
+    ls_liquidus_outline.Transform.Translate = [x_marker + OUTLINE_FRONT_NUDGE, 0.0, 0.0]
+    ls_liquidus_outline.UpdatePipeline(time=time_value)
+    ls_liquidus_outline_disp = Show(ls_liquidus_outline, view)
+    ls_liquidus_outline_disp.Representation = 'Wireframe'
+    ls_liquidus_outline_disp.ColorArrayName = ['POINTS', '']
+    ls_liquidus_outline_disp.AmbientColor = LS_COLOR
+    ls_liquidus_outline_disp.DiffuseColor = LS_COLOR
+    ls_liquidus_outline_disp.LineWidth = LS_LINE_WIDTH
+
+    gm_outline = Transform(Input=gm_slice_clip)
+    gm_outline.Transform = 'Transform'
+    gm_outline.Transform.Translate = [x_marker + OUTLINE_FRONT_NUDGE, 0.0, 0.0]
+    gm_outline.UpdatePipeline(time=time_value)
+    gm_outline_disp = Show(gm_outline, view)
+    gm_outline_disp.Representation = 'Wireframe'
+    gm_outline_disp.ColorArrayName = ['POINTS', '']
+    gm_outline_disp.AmbientColor = LS_COLOR
+    gm_outline_disp.DiffuseColor = LS_COLOR
+    gm_outline_disp.LineWidth = LS_LINE_WIDTH
+
+    # Camera: identical to render_lateral -- looking down +x, up = -y.
+    view.CameraParallelProjection = 1
+    view.CameraViewUp = [0, -1, 0]
+    view.CameraFocalPoint = [x_center, y_center, z_center]
+    view.CameraPosition = [x_center + 2.0 * (xmax - xmin), y_center, z_center]
+    view.CameraParallelScale = (Y_DEPTH_MAX - Y_DEPTH_MIN) / 2.0 * FRAME_MARGIN
+    Render(view)
+
+    SaveScreenshot(output_png, view, ImageResolution=view.ViewSize)
+    log(f"Saved: {output_png}")
+
+    _clip_top_fraction(output_png, 0.10)
+    # Colorbar's title+bar rendered as usual (top-right placement,
+    # labels_above=False (trying it back at the default -- below the bar,
+    # like every other caller -- user request, 2026-08-17, to compare
+    # against the labels_above=True version tried earlier the same day).
+    # skip_overlay=True means it's saved as a standalone file only, not
+    # pasted onto output_png itself -- this colorbar is meant to visually
+    # overlap into the *top* panel above once stacked ("that moves it out
+    # of the lateral-cutaway view and slightly into the top view but that
+    # is cool", user request, 2026-08-17), which this function has no way
+    # to do (it only ever sees this one panel's own canvas). The stacking
+    # script (_tmp_stack3.sh) does that overlay instead, once the panels
+    # are already combined -- see skip_overlay's own docstring.
+    #
+    # 2 labels (endpoints only), not 3 -- with values this close together
+    # ("-0.125"/"-0.075"/"-0.025" are 6 characters each), a 3rd/middle
+    # label overlapped its neighbors at this bar width and was illegible.
+    #
+    # Separate CTF for the colorbar's own visual range (+-CBAR_MARGIN_MM
+    # around the transition bounds), not `ctf` itself (whose range extends
+    # all the way to the true domain edge x_min_mm for actual data
+    # coloring) -- same reasoning/technique as render_top's own colorbar
+    # fix, user request, 2026-08-17.
+    #
+    # Labeled in um, not mm (user request, 2026-08-17) -- same
+    # UM_PER_MM-scaling technique as render_top's own colorbar; harmless
+    # here for the same reason (cbar_ctf is never bound to any real
+    # Show()/ColorBy).
+    UM_PER_MM = 1000.0
+    cbar_ctf = GetColorTransferFunction(FIELD_COLOR + '_cbar_display')
+    cbar_ctf.RGBPoints = [
+        (TRANSITION_BLUE_MM - CBAR_MARGIN_MM) * UM_PER_MM, 0.0, 0.0, 1.0,
+        TRANSITION_BLUE_MM * UM_PER_MM,                    0.0, 0.0, 1.0,
+        TRANSITION_RED_MM * UM_PER_MM,                     1.0, 0.0, 0.0,
+        (TRANSITION_RED_MM + CBAR_MARGIN_MM) * UM_PER_MM,  1.0, 0.0, 0.0,
+    ]
+    _overlay_colorbar(cbar_ctf, 'x (μm)', output_png,
+                       custom_labels=[TRANSITION_BLUE_MM * UM_PER_MM, TRANSITION_RED_MM * UM_PER_MM],
+                       labels_above=False, skip_overlay=True)
+
+    if output_pvsm:
+        SaveState(output_pvsm)
+        log(f"Saved state: {output_pvsm}")
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -2244,8 +2764,8 @@ def render_xray(foam_file, time_value, output_png):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Render one of the four VDEP power-sweep post-processing views.")
-    parser.add_argument('--view', required=True, choices=['top', 'lateral', 'xray', 'transverse'])
+        description="Render one of five VDEP power-sweep post-processing views.")
+    parser.add_argument('--view', required=True, choices=['top', 'lateral', 'xray', 'transverse', 'cutaway'])
     parser.add_argument('case_foam')
     parser.add_argument('time', type=float)
     parser.add_argument('output_png')
@@ -2258,6 +2778,8 @@ def main():
         render_lateral(args.case_foam, args.time, args.output_png, args.output_pvsm)
     elif args.view == 'transverse':
         render_transverse(args.case_foam, args.time, args.output_png, args.output_pvsm)
+    elif args.view == 'cutaway':
+        render_cutaway(args.case_foam, args.time, args.output_png, args.output_pvsm)
     elif args.view == 'xray':
         if args.output_pvsm:
             log("Note: --view=xray never had a ParaView state to save; ignoring output_pvsm arg.")
