@@ -43,15 +43,16 @@ DT_BLACK="fontsize=40:fontcolor=black:x=70:y=40"
 # "Top view".
 DT_TOPLABEL2="fontsize=48:fontcolor=black:x=260:y=40"
 
-# Timestamp: seconds -> microseconds, 2 decimal places, fontsize=56 (was
-# 80 -- reduced 30%). Bottom-left of the top panel -- fully open space
-# there (the panel's own "Top view x down z right" label lives top-left).
-TIME_US=$(awk "BEGIN {printf \"%.2f\", ${TIME_S} * 1e6}")
+# Timestamp: seconds -> microseconds, integer component only (truncated,
+# not rounded -- e.g. 305.44 -> 305), fontsize=56 (was 80 -- reduced 30%).
+# Bottom-left of the top panel -- fully open space there (the panel's own
+# "Top view x down z right" label lives top-left).
+TIME_US=$(awk "BEGIN {printf \"%d\", int(${TIME_S} * 1e6)}")
 DT_TIME="fontsize=56:fontcolor=black:x=70:y=h-th-20"
 
 ffmpeg -y -loglevel error -i "$TOP" -i "$CUT" -i "$XRAY" -i "$CUT_COLORBAR" \
   -filter_complex "
-    [0:v]scale=${W}:-2,drawtext=text='Top view  ':${DT_BLACK},drawtext=text='x ↓  z →':${DT_TOPLABEL2},drawtext=text='t = ${TIME_US} us':${DT_TIME}[v0];
+    [0:v]scale=${W}:-2,drawtext=text='Top view   ':${DT_BLACK},drawtext=text='x ↓  z →':${DT_TOPLABEL2},drawtext=text='t = ${TIME_US} us':${DT_TIME}[v0];
     [1:v]scale=${W}:-2,drawtext=text='Lateral-Cutaway  x < -25um':${DT_BLACK}[v1];
     [2:v]scale=${W}:-2,drawtext=text='Lateral-Attenuation':${DT_BLACK}[v2];
     [v0][v1][v2]vstack=inputs=3[stacked];
