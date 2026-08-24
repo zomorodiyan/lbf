@@ -16,9 +16,8 @@ before doing any of the following:**
 - Running two cases concurrently — CPU/memory budget guidance
 - Making mp4/mpg videos from PNG exports — `ffmpeg` (bundled in the `lbf3` image) collage/concat commands
 - Building or rebuilding the Docker image — `CACHE_BUST` pattern
-- Post-processing with the synthetic-X-ray script (`results/lateral_xray.py`) or the
-  normal-render scripts (`results/lateral_screenshot.py`, `results/top_screenshot.py`) — these run
-  in a **different** Docker image (`kitware/paraview:pv-v5.8.0-osmesa-py3`), not `lbf3`; see the
+- Post-processing with `results/render_view.py` (`--view=top|lateral|xray|transverse`) — runs in a
+  **different** Docker image (`kitware/paraview:pv-v5.8.0-osmesa-py3`), not `lbf3`; see the
   "Post-processing" section below
 
 Running without the correct Docker flags causes silent failures or poor performance.
@@ -26,6 +25,18 @@ Running without the correct Docker flags causes silent failures or poor performa
 Additionally, **always read [vdep_power_sweep.md](vdep_power_sweep.md)** before running, seeding,
 or discussing any of `testrun58`–`testrun67` (the active VDEP power-sweep pipeline) — it explains
 the seed→fork lineage and which core-count seed each fork must be copied from.
+
+Similarly, **always read [vdep_remedy_sims.md](vdep_remedy_sims.md)** before running, seeding, or
+discussing `testrun68`–`testrun70` (the recoil-pressure remedy sims from
+[task_Aug4.md](task_Aug4.md)) — it covers the testrun61 seed hand-off reused for these three, the
+one-time solver change needed before testrun68, and the Mehrdad/Zixun assignment.
+
+Similarly, **always read [T0_sweep.md](T0_sweep.md)** before running, seeding, or discussing
+`testrun73`–`testrun84` (the initial-temperature sweep: four independent testrun60→61→69-style
+lineages at T0=100/200/400/500K instead of the usual 300K) — case dictionaries are prepared but
+**nothing has been run yet** as of 2026-08-23. Also see
+[T0_sweep_assignment.md](T0_sweep_assignment.md) for the Mehrdad/Zixun run split and ordering
+(cold pair vs. hot pair) for these cases.
 
 ## Repo layout
 
@@ -38,9 +49,8 @@ the seed→fork lineage and which core-count seed each fork must be copied from.
   testrun55–57 (mesh-resolution tests) still exist on disk but are outside current focus.
 - `tutorials/laserbeamFoam/plc/` — PLC reference cases (testrun1–29, 316L steel)
 - `tutorials/compressiblelaserbeamFoam/SS316L_Ti64_interface/`, `tutorials/multiComponentlaserbeamFoam/` — multi-material cases (`multicomponentLaserbeamFoam` solver)
-- `results/lateral_xray.py`, `results/lateral_screenshot.py`, `results/top_screenshot.py`
-  — synthetic X-ray and normal-render post-processing scripts for the VDEP power-sweep cases; see
-  "Post-processing" below
+- `results/render_view.py` — merged post-processing script (`--view=top|lateral|xray|transverse`)
+  for the VDEP power-sweep cases; see "Post-processing" below
 
 ## Key facts
 
@@ -60,32 +70,30 @@ the seed→fork lineage and which core-count seed each fork must be copied from.
 - Two **separate** Docker images are involved — don't confuse them:
   - `lbf3` — simulations, `reconstructParMesh`/`reconstructPar`, and `ffmpeg` (video assembly).
   - `kitware/paraview:pv-v5.8.0-osmesa-py3` — headless (OSMesa, no GUI) ParaView/pvpython, used
-    only for the `results/*.py` scripts below. Pull with
+    only for `results/render_view.py` below. Pull with
     `docker pull kitware/paraview:pv-v5.8.0-osmesa-py3` or let the first `docker run` fetch it.
-- `lateral_xray.py` — synthetic X-ray attenuation view (lateral/through-thickness),
-  with a dotted melt-pool-bottom boundary line derived from a continuous attenuation-ceiling
-  threshold (not a boolean presence flag — see the script's own header comment for why that
-  matters). `lateral_screenshot.py` — a normal (not ray-traced) ParaView render of the same lateral
-  view, colored by lateral position to reveal depth. `top_screenshot.py` — same normal-render
-  technique but viewed top-down, colored by height relative to the nominal surface.
-  `_render_stacked_video.sh` — drives all three scripts across every reconstructed timestep of a
-  given testrun and stacks them into one image per timestep plus an mp4 (see below).
-- Invocation (any of the three `results/*.py` scripts takes the same args): `docker run --rm -e
-  PYTHONUNBUFFERED=1 -v <repo>:/workspace --entrypoint /opt/paraview/bin/pvpython
-  kitware/paraview:pv-v5.8.0-osmesa-py3
-  /workspace/results/lateral_xray.py /workspace/<case>.foam <time> <output.png>`.
-- Batch-rendering every timestep of a testrun, stacking the three views (top/lateral/X-ray) into one
-  image per timestep, and building an mp4: `bash results/_render_stacked_video.sh <testrun>` (bare
-  number like `64`, or a full case dir name) -- works for any reconstructed VDEP power-sweep case,
-  not just testrun64. Auto-creates a `.foam` marker if the case doesn't have one yet, and errors out
-  clearly if the case hasn't been reconstructed (no timestep directories found). Uses the same
-  numeric-sorted-timestep + ffmpeg-concat-list pattern as the older single-view
-  `results/_render_ls_all_and_video.sh`, since timestep-named files mix scientific/decimal notation
-  and don't sort correctly alphabetically.
+- `results/render_view.py --view={top,lateral,xray,transverse}` — one merged script, four views
+  (used to be 4 separate scripts; merged to kill duplicated code — see the script's own header):
+  - `top` — top-down normal render, colored by height relative to the nominal surface.
+  - `lateral` — normal render of the lateral (through-thickness) view, colored by lateral position.
+  - `xray` — synthetic X-ray attenuation view (same lateral view, different technique: numpy
+    ray-tracing + Beer-Lambert, not a ParaView render), with a dotted melt-pool-bottom boundary
+    line derived from a continuous attenuation-ceiling threshold (see the script's header for why
+    not a boolean presence flag).
+  - `transverse` — cross-section perpendicular to the scan direction (looking down the z/scan axis
+    at the x-y width-vs-depth plane): three side-by-side panels, each a thin isosurface slab cut at
+    a fixed distance (2.0/1.5/1.0mm, left-to-right) behind the laser's current z position.
+  - Invocation: `docker run --rm -e PYTHONUNBUFFERED=1 -v <repo>:/workspace --entrypoint
+    /opt/paraview/bin/pvpython kitware/paraview:pv-v5.8.0-osmesa-py3
+    /workspace/results/render_view.py --view=<view> /workspace/<case>.foam <time> <output.png>`.
+- `results/_render_stacked_video.sh <testrun>` (bare number like `64`, or a full case dir name) —
+  batch-renders every reconstructed timestep through all four views, vstacks them into one image
+  per timestep, and builds an mp4. Works for any reconstructed VDEP power-sweep case. Auto-creates
+  a `.foam` marker if missing; errors out clearly if the case hasn't been reconstructed.
 
 ## Physical parameters (current active cases)
 
-- Material: AlSi10Mg, Tliq=867 K, Tsol=840 K, ρ=2670 kg/m³
+- Material: Al 6061, Tliq=925 K, Tsol=855 K, ρ=2700 kg/m³
 - Laser: 1064 nm, 35 µm radius, Drude/Fresnel absorptivity (~11% at normal incidence for liquid Al)
 - Process: power varies per fork, 650–900 W effective (see [vdep_power_sweep.md](vdep_power_sweep.md)), 6 m/s scan speed
 - Mesh: 40 µm base, AMR at metal–gas interface (3 levels → 5 µm; see e.g.
