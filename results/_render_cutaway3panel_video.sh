@@ -121,7 +121,7 @@ for t in "${TIMES[@]}"; do
   f="results/${PREFIX}_t${t}.png"
   if [ -f "$f" ]; then
     echo "file '$(basename "$f")'" >> "$CONCAT_LIST"
-    echo "duration 0.2" >> "$CONCAT_LIST"
+    echo "duration 0.4" >> "$CONCAT_LIST"
     LAST_FRAME="$f"
   fi
 done
