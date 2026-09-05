@@ -5,6 +5,7 @@
 |   \\  /    A nd           | Website:  www.openfoam.com                      |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 FoamFile
 {
     version         2;
@@ -22,7 +23,7 @@ startTime       0;
 
 stopAt          endTime;
 
-endTime         4e-4;
+endTime         0.0004;
 
 deltaT          1e-08;
 
@@ -60,5 +61,6 @@ functions
         libs            ( utilityFunctionObjects );
     }
 }
+
 
 // ************************************************************************* //

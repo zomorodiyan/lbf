@@ -1,0 +1,37 @@
+# Extends kitware/paraview:pv-v5.8.0-osmesa-py3 (the headless ParaView/pvpython
+# image results/render_view.py and plot_domain_schematic.py run in -- see
+# TESTRUNS.md's "Post-processing" section) with a newer matplotlib.
+#
+# Why: that base image bundles matplotlib 3.1.1, which predates
+# Axes3D.set_box_aspect (added in 3.3.0) -- render_view.py's render_transverse
+# and plot_domain_schematic.py both have a pre-3.3 fallback (manual axis-limit
+# padding) for this, but it's a different code path than what
+# proto_transverse_3d.py exercises locally (matplotlib 3.11, real
+# set_box_aspect), which was the source of a "dimensions aren't the same"
+# mismatch between the two (2026-08-03). 3.3.4 is the last 3.3.x point release
+# and the newest series still supporting this image's Python 3.6.9 (matplotlib
+# dropped 3.6 support in the 3.4 series).
+#
+# Build:
+#   docker build -f results/Dockerfile.paraview-mpl -t lbf3-paraview-mpl .
+# Use exactly like the base image, just swap the image name in the `docker
+# run` command (same --entrypoint /opt/paraview/bin/pvpython, same volume
+# mount, same args):
+#   docker run --rm --user "$(id -u):$(id -g)" -e PYTHONUNBUFFERED=1 \
+#     -v $(pwd):/workspace --entrypoint /opt/paraview/bin/pvpython \
+#     lbf3-paraview-mpl /workspace/results/render_view.py --view=transverse ...
+FROM kitware/paraview:pv-v5.8.0-osmesa-py3
+
+# The base image sets USER pv-user (uid 1000, see TESTRUNS.md's own note on
+# it) -- root back for the install steps below (apt-get and pip3 install
+# both need to write to system paths). `docker run` always overrides the
+# effective user via --user anyway (same convention every script in this
+# repo already uses), so this doesn't change runtime behavior.
+USER root
+
+# matplotlib 3.3.4 pulls in Pillow as a dependency; the latest Pillow (8.4.0)
+# has no prebuilt wheel for this image's Python 3.6 and falls back to
+# compiling from source, which fails here (no C toolchain in this image, and
+# installing one just for this is unnecessary weight) -- pinning Pillow to
+# the last version with a cp36 manylinux1 wheel avoids that build entirely.
+RUN pip3 install --no-cache-dir "pillow==8.3.2" "matplotlib==3.3.4"

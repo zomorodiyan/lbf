@@ -25,8 +25,8 @@ gas cells during early timesteps.
 `transportProperties` supports a polynomial surface tension `poly_sigma` (coefficients vs. T),
 enabling the full Morohoshi σ(T) model with sign-changing dσ/dT for sulphur/oxygen-bearing steels.
 
-### VDEP absorptivity model — AlSi10Mg
-The velocity-dependent energy profile (VDEP) absorptivity model for AlSi10Mg bare-plate laser
+### VDEP absorptivity model — Al 6061
+The velocity-dependent energy profile (VDEP) absorptivity model for Al 6061 bare-plate laser
 melting (1064 nm, keyhole regime) is implemented and exercised by the current power-sweep case set,
 `vdep/testrun58`–`testrun67` (see [vdep_power_sweep.md](vdep_power_sweep.md)). Earlier prototype
 cases (`testrun30`–`53`) have been removed; check git history from before this cleanup if you need
@@ -38,7 +38,7 @@ All research cases live under `tutorials/laserbeamFoam/`:
 | Directory | Material | Study |
 |---|---|---|
 | `plc/testrun1–29` | 316L stainless steel | PLC (power-law creep) baseline; surface tension parametric study |
-| `vdep/testrun58`–`67` | AlSi10Mg | VDEP power sweep (650–900 W); see [vdep_power_sweep.md](vdep_power_sweep.md) |
+| `vdep/testrun58`–`67` | Al 6061 | VDEP power sweep (650–900 W); see [vdep_power_sweep.md](vdep_power_sweep.md) |
 
 See [SURFACE_TENSION_STUDY.md](SURFACE_TENSION_STUDY.md) for the 316L surface tension study notes.
 
@@ -46,10 +46,10 @@ See [SURFACE_TENSION_STUDY.md](SURFACE_TENSION_STUDY.md) for the 316L surface te
 - `tutorials/laserbeamFoam/laser.pvsm` — ParaView state for melt pool + laser ray visualization
 - `tutorials/laserbeamFoam/fix_vtk_series.py` — repairs `.vtk.series` files after paused/resumed runs
 - `reconstruct_results.sh` — Docker-based reconstruction with multi-case and `--latest` support
-- `results/lateral_xray.py`, `results/lateral_screenshot.py`, `results/top_screenshot.py` —
-  synthetic X-ray and normal-render melt pool views for the VDEP power-sweep cases (headless
-  pvpython, see TESTRUNS.md's "Post-processing" section for the Docker image and invocation); batch
-  all three plus mp4 assembly via `results/_render_stacked_video.sh <testrun>`
+- `results/render_view.py` (`--view=top|lateral|xray|transverse`) — synthetic X-ray and
+  normal-render melt pool views for the VDEP power-sweep cases (headless pvpython, see
+  TESTRUNS.md's "Post-processing" section for the Docker image and invocation); batch all four
+  views plus mp4 assembly via `results/_render_stacked_video.sh <testrun>`
 
 ---
 

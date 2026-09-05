@@ -280,39 +280,58 @@ Notes:
 
 ---
 
-## Post-processing: synthetic X-ray + normal-render views (`results/*.py`)
+## Post-processing: synthetic X-ray + normal-render views (`results/render_view.py`)
 
-Three scripts render different views of the melt pool for the VDEP power-sweep cases. They run in a
-**different Docker image than everything else on this page** —
-`kitware/paraview:pv-v5.8.0-osmesa-py3` (headless ParaView/pvpython, OSMesa, no GUI), not `lbf3`.
-Pull it with `docker pull kitware/paraview:pv-v5.8.0-osmesa-py3` (or it auto-pulls on first use,
-given internet access).
+One merged script (`--view=top|lateral|xray|transverse`) renders four different views of the melt
+pool for the VDEP power-sweep cases — it used to be 4 separate scripts (`top_screenshot.py`,
+`lateral_screenshot.py`, `lateral_xray.py`, `transverse_screenshot.py`), merged to kill duplicated
+code (see the script's own header comment). It runs in a **different Docker image than everything
+else on this page** — `kitware/paraview:pv-v5.8.0-osmesa-py3` (headless ParaView/pvpython, OSMesa,
+no GUI), not `lbf3`. Pull it with `docker pull kitware/paraview:pv-v5.8.0-osmesa-py3` (or it
+auto-pulls on first use, given internet access).
 
-- `lateral_xray.py` — synthetic through-thickness X-ray-style attenuation projection
-  (lateral view), with a dotted melt-pool-bottom boundary line derived from a continuous
-  attenuation-ceiling threshold rather than a boolean presence flag — see the script's own header
-  comment for why that distinction matters (a boolean flag is fragile against isolated
-  mesh-triangle artifacts; a continuous threshold on an averaged value isn't).
-- `lateral_screenshot.py` — a normal (not ray-traced) ParaView surface render of the same lateral
-  view, colored by lateral (x) position rather than a physical field, since that's otherwise the
-  one direction an orthographic profile view can't show.
-- `top_screenshot.py` — same normal-render technique, viewed top-down instead, colored by height
-  relative to the nominal surface.
+**`lbf3-paraview-mpl`** is a local derived image (`results/Dockerfile.paraview-mpl`) that's the same
+base image with matplotlib upgraded from the stock 3.1.1 to 3.3.4 (the newest series still
+supporting this image's Python 3.6) — matplotlib 3.3 adds `Axes3D.set_box_aspect`, which
+`render_view.py`'s `--view=transverse` and `plot_domain_schematic.py` both use directly when
+available (falling back to manual axis-limit padding on 3.1.1 otherwise — both code paths verified
+to render identically). Build it once with:
+```bash
+docker build -f results/Dockerfile.paraview-mpl -t lbf3-paraview-mpl .
+```
+then swap `kitware/paraview:pv-v5.8.0-osmesa-py3` for `lbf3-paraview-mpl` in any command below —
+same `--entrypoint`, same args, nothing else changes. Optional: everything here still works
+against the stock image unmodified.
+
+- `--view=xray` — synthetic through-thickness X-ray-style attenuation projection (lateral view),
+  with a dotted melt-pool-bottom boundary line derived from a continuous attenuation-ceiling
+  threshold rather than a boolean presence flag — see the script's own header comment for why that
+  distinction matters (a boolean flag is fragile against isolated mesh-triangle artifacts; a
+  continuous threshold on an averaged value isn't). Implementation-wise this one is numpy
+  ray-tracing + Beer-Lambert, not a ParaView render at all — unlike the other three views.
+- `--view=lateral` — a normal (not ray-traced) ParaView surface render of the same lateral view,
+  colored by lateral (x) position rather than a physical field, since that's otherwise the one
+  direction an orthographic profile view can't show.
+- `--view=top` — same normal-render technique, viewed top-down instead, colored by height relative
+  to the nominal surface.
+- `--view=transverse` — cross-section perpendicular to the scan direction (looking down the
+  z/scan axis at the x-y width-vs-depth plane): three side-by-side panels, each a thin isosurface
+  slab cut at a fixed distance (2.0/1.5/1.0mm, left-to-right) behind the laser's current z position.
 
 See [Permissions across both Docker images](#permissions-across-both-docker-images) below before
 running any of these — the short version is: always add `--user "$(id -u):$(id -g)"` to
 `kitware/paraview` commands, or they fail at the very last step after doing all the actual work.
 
-All three take the same CLI arguments:
+All four views take the same CLI arguments:
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" -e PYTHONUNBUFFERED=1 -v $(pwd):/workspace \
   --entrypoint /opt/paraview/bin/pvpython \
   kitware/paraview:pv-v5.8.0-osmesa-py3 \
-  /workspace/results/lateral_xray.py \
+  /workspace/results/render_view.py --view=xray \
   /workspace/tutorials/laserbeamFoam/vdep/CASE/CASE.foam <time> /workspace/results/out.png
 ```
 
-**Batch-render every available timestep, stack all three views into one image per timestep, and
+**Batch-render every available timestep, stack all four views into one image per timestep, and
 build an mp4:**
 ```bash
 bash results/_render_stacked_video.sh 65
@@ -331,8 +350,8 @@ scratch:
 - Get the timestep list with `find CASE -maxdepth 1 -type d -regex ".*/[0-9.e-]+" | xargs -n1
   basename | sort -g` (numeric sort, not alphabetical — filenames mix scientific notation for early
   small timesteps with decimal notation for later ones, which sort wrong alphabetically).
-- Stack the three per-timestep PNGs with ffmpeg: scale each to the widest of the three (so nothing
-  gets needlessly upscaled) via `scale=W:-2`, then `vstack=inputs=3`.
+- Stack the four per-timestep PNGs with ffmpeg: scale each to the widest of the four (so nothing
+  gets needlessly upscaled) via `scale=W:-2`, then `vstack=inputs=4`.
 - Build the ffmpeg video input as an explicit **concat demuxer list** (`file '...'` / `duration ...`
   lines in the same numerically-sorted order), not a `%04d` pattern — these timestep-named files
   aren't sequentially numbered. Repeat the last file once more without a `duration` line (a concat
@@ -373,8 +392,8 @@ apply the matching fix:
 
 - **`kitware/paraview:pv-v5.8.0-osmesa-py3` runs as a non-root user** (`pv-user`, uid 1000). If that
   doesn't match your host uid, the container reads the case files fine but fails at the *very last
-  step* (`fig.savefig` in the Python scripts, or `vtkPNGWriter`/matplotlib inside
-  `top_screenshot.py`) with `PermissionError: [Errno 13] Permission denied` (or a VTK
+  step* (`fig.savefig`, or `vtkPNGWriter`/matplotlib inside `render_view.py`'s `--view=top`)
+  with `PermissionError: [Errno 13] Permission denied` (or a VTK
   `Unable to open file` / `Ran out of disk space` error, which is just VTK's generic wording for the
   same underlying write failure) when writing into the host-owned `results/` directory — **after**
   doing all the actual rendering work, which is easy to mistake for a rendering bug instead of a

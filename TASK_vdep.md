@@ -1,9 +1,9 @@
-# Task: Replicate VDEP Experimental Results (AlSi10Mg, laserbeamFoam)
+# Task: Replicate VDEP Experimental Results (Al 6061, laserbeamFoam)
 
 ## Ultimate Goal
 
 Reproduce experimentally measured vapor depression (keyhole) depth and morphology
-for AlSi10Mg single-track laser scans across a range of powers, using the
+for Al 6061 single-track laser scans across a range of powers, using the
 `laserbeamFoam` VOF solver. Validation target: keyhole depth vs. laser power curve
 from X-ray synchrotron or ex-situ characterization data.
 
@@ -21,7 +21,7 @@ effort.
 
 ## Physical Setup
 
-- **Material:** AlSi10Mg (T_sol=840 K, T_liq=867 K, ρ=2670 kg/m³)
+- **Material:** Al 6061 (T_sol=855 K, T_liq=925 K, ρ=2700 kg/m³)
 - **Laser:** 1064 nm, 35 µm radius, Drude/Fresnel absorptivity (~11% at normal
   incidence for liquid Al)
 - **Scan speed:** 6000 mm/s (6 m/s)
@@ -61,8 +61,8 @@ Check with whoever owns a given fork for anything more recent than this table
 ## Post-processing: turning reconstructed results into animations
 
 `results/_render_stacked_video.sh` batch-renders every reconstructed timestep of a
-case into three views (top-down, lateral, synthetic X-ray), stacks them into one
-image per timestep, and assembles an mp4. Full details, including the exact script
+case into four views (top-down, lateral, synthetic X-ray, transverse), stacks them
+into one image per timestep, and assembles an mp4. Full details, including the exact script
 options and troubleshooting, are in TESTRUNS.md's "Post-processing" and
 "Permissions across both Docker images" sections — short version:
 

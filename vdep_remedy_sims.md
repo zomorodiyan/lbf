@@ -28,26 +28,51 @@ The recoil-pressure cap is a **solver-code change**, not a case-dictionary edit 
 two remedies. This is entirely **Mehrdad's side** — Zixun never touches this section, never
 rebuilds anything, and keeps using the plain `lbf3` image exactly as before for testrun70.
 
-**Build it as a separate, distinctly-named image — do NOT rebuild the shared `lbf3` image in
-place**:
+**Status: done (2026-08-04).** The code change lives on a separate branch, `tcap-remedy`, built
+in an isolated `git worktree` — not the shared `main` working tree — specifically so it could be
+built while testrun69 was actively running (a plain `git checkout` in the same directory would
+have been safe too here since only solver-source files changed, but the worktree avoids that risk
+entirely regardless of what's running or being edited at build time):
 ```bash
+git worktree add -b tcap-remedy ../lbf3-tcap-worktree main
+cd ../lbf3-tcap-worktree
+# ... edit applications/solvers/laserbeamFoam/createFields.H and UEqn.H (see below) ...
+git add applications/solvers/laserbeamFoam/UEqn.H applications/solvers/laserbeamFoam/createFields.H
+git commit -m "Add case-configurable Tcap recoil-pressure temperature cap"
 docker build --build-arg CACHE_BUST=$(date +%s) -t lbf3-tcap .
 ```
-(after making the code change below on a branch/copy that has the `Tcap` clamp added). Keeping it
-as `lbf3-tcap` rather than overwriting `lbf3` means nobody else's in-progress work on the shared
-image is disturbed, and there's no coordination needed with Zixun before doing this.
+Keeping it as `lbf3-tcap` rather than overwriting `lbf3` means nobody else's in-progress work on
+the shared image is disturbed, and there's no coordination needed with Zixun before doing this.
+The `tcap-remedy` branch is **not merged into `main`** — the code change only exists there and in
+the `lbf3-tcap` image built from it.
 
 **Reminder for later**: every `docker run` command for testrun68 (build, resume, reconstruct —
 anything touching that case) must say `lbf3-tcap`, not `lbf3`. Everything else in this file
 (testrun69, testrun70, and the seed hand-off steps below for all three cases) still uses the
 regular `lbf3` image — only testrun68's *own* run/resume commands swap the image name.
 
-Code change itself (`Tcap` as a case-configurable dictionary parameter, looked up the same way
-`Tvap` already is, defaulting to "no cap" when absent — so even reused on `lbf3-tcap`, a case
-without a `Tcap` entry behaves exactly like the old unbounded formula): add a `Tcap` lookup next
-to `Tvap`'s in `createFields.H`, then clamp `TsafeU` in `UEqn.H` at both the existing 300K floor
-and the new `Tcap` ceiling before it feeds the recoil-pressure exponent. Exact lookup syntax TBD
-when actually coding it.
+Code change (`Tcap` as a case-configurable dictionary parameter, looked up the same way `Tvap`
+already is, defaulting to `GREAT` — OpenFOAM's standard "effectively infinite" constant — when
+absent, so a case without a `Tcap` entry reproduces the old unbounded formula exactly):
+
+`createFields.H`, right after `Tvap`'s block:
+```cpp
+const dimensionedScalar Tcap
+(
+    "Tcap",
+    dimensionSet(0, 0, 0, 1, 0),
+    transportProperties.lookupOrDefault<scalar>("Tcap", GREAT)
+);
+```
+
+`UEqn.H`, `TsafeU`'s definition — clamp at both the existing 300K floor and the new `Tcap`
+ceiling:
+```cpp
+const volScalarField TsafeU
+(
+    min(max(T, dimensionedScalar("Tmin", dimTemperature, scalar(300.0))), Tcap)
+);
+```
 
 ---
 
