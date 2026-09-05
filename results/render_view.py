@@ -58,10 +58,29 @@ import paraview.simple
 
 import matplotlib
 matplotlib.use('Agg')
+import matplotlib.font_manager as fm
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 from matplotlib.transforms import offset_copy
 import numpy as np
+
+# Liberation Sans -- a free (SIL Open Font License), metrically-compatible
+# substitute for Arial (user request, 2026-08-22: "use a font very similar
+# to arial if using arial is illegal otherwise download it" -- true Arial
+# is a proprietary Monotype font with no legal free-redistribution license,
+# so this is the standard legal substitute instead, not Arial itself).
+# This Docker image's bundled matplotlib only ships DejaVu/STIX/Computer
+# Modern, so the actual font files are downloaded once (see
+# results/fonts/README, if present) and registered here at import time
+# rather than relying on any system font install.
+_font_paths = [os.path.join('/workspace/results/fonts', _f) for _f in (
+    'LiberationSans-Regular.ttf', 'LiberationSans-Bold.ttf',
+    'LiberationSans-Italic.ttf', 'LiberationSans-BoldItalic.ttf')]
+# addfont() doesn't exist yet in this image's matplotlib (3.1.1, predates
+# 3.2's addfont) -- createFontList()+ttflist.extend() is that version's
+# own equivalent for registering fonts outside the standard search paths.
+fm.fontManager.ttflist.extend(fm.createFontList(_font_paths))
+plt.rcParams['font.family'] = 'Liberation Sans'
 
 import vtk
 from vtk.util.numpy_support import vtk_to_numpy
@@ -380,7 +399,7 @@ def _overlay_colorbar(ctf, title, output_png, custom_labels=None,
                        width_frac=0.35, cb_height=None, vert_margin=15,
                        side_margin=15, vert_margin_frac=None,
                        down_shift_chars=0, side='right', vert='top',
-                       labels_above=False, skip_overlay=False):
+                       labels_above=False, skip_overlay=False, thickness_scale=1.0):
     """Render ctf's colorbar *narrower* than the view (width_frac of its
     own already-trimmed width -- deliberately small, not spanning the
     image) and alpha-composite it onto the view image itself, near the
@@ -513,6 +532,18 @@ def _overlay_colorbar(ctf, title, output_png, custom_labels=None,
     colorbar.Orientation = 'Horizontal'
     colorbar.TitleFontSize = round(colorbar.TitleFontSize * 3 * 0.5 * font_scale)
     colorbar.LabelFontSize = round(colorbar.LabelFontSize * 3 * 0.5 * font_scale)
+    # thickness_scale: render_cutaway-only knob -- user request, 2026-08-22:
+    # "twice the current thickness" for its topright colorbar, independent
+    # of the collage script's own overall-image-size scaling (150%->160%),
+    # which just rescales the whole already-rendered PNG uniformly rather
+    # than the bar's own stroke thickness. Only touches ScalarBarThickness
+    # (leaving it at ParaView's own default) when explicitly requested --
+    # multiplying by font_scale unconditionally would also silently rescale
+    # every *other* existing caller's bar thickness in proportion to their
+    # own view width (font_scale is ~vw/REF_VW, essentially never exactly
+    # 1.0), which nothing asked for.
+    if thickness_scale != 1.0:
+        colorbar.ScalarBarThickness = round(colorbar.ScalarBarThickness * thickness_scale * font_scale)
     label_font_size = colorbar.LabelFontSize  # captured for down_shift_chars
                                                # below -- cb_view/colorbar
                                                # get Delete()d before then
@@ -598,6 +629,157 @@ def _clip_top_fraction(output_png, frac):
     cut = round(img.shape[0] * frac)
     mpimg.imsave(output_png, img[cut:, :])
     log(f"Clipped top {frac * 100:.0f}%: kept rows [{cut},{img.shape[0] - 1}]")
+
+
+def _add_cutaway_grid(output_png, z_left_mm, z_right_mm, y_top_offset_um, y_bottom_offset_um,
+                       z_step_mm=0.1, y_step_um=50, time_us=None):
+    """Annotation-planning aid for render_cutaway (user request,
+    2026-08-18): overlay a physical-coordinate grid -- z in mm, y in um
+    offset from the nominal surface (same offset convention as render_top's
+    own y-coloring, positive = below surface) -- on a *copy* of output_png,
+    saved alongside it as ..._grid.png, so annotation locations/timesteps
+    can be discussed by coordinate instead of eyeballed pixels. Leaves
+    output_png itself untouched.
+
+    z_left_mm/z_right_mm/y_top_offset_um/y_bottom_offset_um must be the
+    *actual* extent this frame was rendered at (the caller derives them
+    from the same CameraParallelScale/crop values used for the real
+    render) -- passed in rather than re-derived here so there's exactly
+    one place (the caller) that has to get that math right, and this
+    function just trusts it. Uses imshow(..., extent=...) so matplotlib's
+    own coordinate transform places the gridlines/ticks, instead of hand
+    computing pixel positions a second time here.
+    """
+    img = mpimg.imread(output_png)
+    h, w = img.shape[:2]
+    dpi = 100
+    fig, ax = plt.subplots(figsize=(w / dpi * 1.12, h / dpi * 1.18), dpi=dpi)
+    ax.imshow(img, extent=(z_left_mm, z_right_mm, y_bottom_offset_um, y_top_offset_um), aspect='auto')
+    z_ticks = np.arange(np.ceil(z_left_mm / z_step_mm) * z_step_mm, z_right_mm, z_step_mm)
+    y_ticks = np.arange(np.ceil(y_top_offset_um / y_step_um) * y_step_um, y_bottom_offset_um, y_step_um)
+    # Each gridline gets its own color, sampled from a position along a
+    # colormap -- not a uniform color for every line -- so a line can be
+    # picked out and named by eye ("the orange vertical line") instead of
+    # having to read its printed number (user request, 2026-08-18). z
+    # (vertical lines) and y (horizontal lines) use different colormap
+    # families (rainbow vs cool) so which *axis* a color belongs to is
+    # also unambiguous at a glance, not just which position along it.
+    z_cmap, y_cmap = plt.get_cmap('rainbow'), plt.get_cmap('cool')
+    z_span = (z_right_mm - z_left_mm) or 1.0
+    y_span = (y_bottom_offset_um - y_top_offset_um) or 1.0
+    z_colors = [z_cmap((v - z_left_mm) / z_span) for v in z_ticks]
+    y_colors = [y_cmap((v - y_top_offset_um) / y_span) for v in y_ticks]
+    for zt, c in zip(z_ticks, z_colors):
+        ax.axvline(zt, color=c, linewidth=1.1, alpha=0.9)
+    for yt, c in zip(y_ticks, y_colors):
+        ax.axhline(yt, color=c, linewidth=1.1, alpha=0.9)
+    ax.set_xticks(z_ticks)
+    ax.set_yticks(y_ticks)
+    ax.set_xticklabels([f"{v:.1f}" for v in z_ticks], fontsize=7)
+    ax.set_yticklabels([f"{v:+.0f}" for v in y_ticks], fontsize=7)
+    for label, c in zip(ax.get_xticklabels(), z_colors):
+        label.set_color(c)
+        label.set_fontweight('bold')
+    for label, c in zip(ax.get_yticklabels(), y_colors):
+        label.set_color(c)
+        label.set_fontweight('bold')
+    ax.set_xlabel("z (mm)", fontsize=8)
+    ax.set_ylabel("y offset from surface (um)", fontsize=8)
+    if time_us is not None:
+        # Top-left, in axes-fraction coords (user request, 2026-08-18:
+        # "integer us" time-progression label).
+        ax.text(0.015, 0.97, f"{round(time_us)}us", transform=ax.transAxes,
+                fontsize=11, fontweight='bold', color='black', ha='left', va='top')
+    grid_png = re.sub(r'\.png$', '_grid.png', output_png)
+    fig.tight_layout()
+    fig.savefig(grid_png)
+    plt.close(fig)
+    log(f"Saved grid overlay: {grid_png}")
+
+
+def _overlay_rays_on_cutaway(output_png, case_dir, time_value, ymin_domain,
+                              z_left_mm, z_right_mm, y_top_offset_um, y_bottom_offset_um,
+                              supersample=1, ray_max_opacity=0.25, ray_color=(0.55, 0.0, 0.0)):
+    """Composite laser ray-tracing segments onto output_png in place, dark
+    red (user request, 2026-08-22 -- was dark orange first, but that was
+    too close to the surface's own orange x-coloring; was green before
+    that), each segment's opacity scaled 0-ray_max_opacity (25%, was 50%,
+    same request) by its own power (user request, 2026-08-22, for
+    collage_v3) -- reuses the exact projected-segments/power-alpha technique
+    render_xray's own (orange) ray overlay already uses (see its comments),
+    just composited directly onto this ParaView cutaway render in its
+    y-offset-from-surface/z-mm convention instead of a separate matplotlib
+    figure in raw-y/mm.
+
+    Unlike _add_cutaway_grid (which deliberately saves a separate, differently
+    -sized diagnostic file), this OVERWRITES output_png at its own original
+    pixel dimensions (fig.add_axes([0,0,1,1]), no tight_layout/margins) --
+    output_png is the actual collage source panel, and downstream collage
+    cropping (_build_cutaway_collage_v1.py's build_panel) computes crop
+    pixel bounds analytically from the image's own shape, so its dimensions
+    must not change here.
+    """
+    rays = _load_laser_rays(case_dir, time_value)
+    if rays is None:
+        log("No laser-ray VTK series found for this case -- skipping ray overlay")
+        return
+    points, segments, power, ray_idx, rays_vtk_path = rays
+    log(f"Loaded laser rays for cutaway overlay: {rays_vtk_path} "
+        f"({len(points)} points, {len(segments)} segments)")
+    if not len(segments) or power is None:
+        log("Ray VTK has no segments/power data -- skipping ray overlay")
+        return
+
+    SURFACE_Y = 0.2e-3
+    # Extend each ray from its first *recorded* point up to the domain's
+    # real top edge (ymin_domain) at constant (launch) power, same "ray
+    # otherwise appears to start mid-air" fix render_xray already applies
+    # (see its own comment) -- this view's own set_xlim/set_ylim below
+    # clips it to the visible window exactly the same way.
+    if ray_idx is not None:
+        _, first_idx = np.unique(ray_idx, return_index=True)
+        n_orig = len(points)
+        launch_points = points[first_idx].copy()
+        launch_points[:, 1] = ymin_domain
+        launch_power = power[first_idx]
+        points = np.concatenate([points, launch_points], axis=0)
+        power = np.concatenate([power, launch_power], axis=0)
+        launch_segments = np.stack(
+            [np.arange(n_orig, n_orig + len(first_idx)), first_idx], axis=1)
+        segments = np.concatenate([segments, launch_segments], axis=0)
+
+    from matplotlib.collections import LineCollection
+    p0, p1 = points[segments[:, 0]], points[segments[:, 1]]
+    seg_xy = np.stack([
+        np.stack([p0[:, 2] * 1e3, (p0[:, 1] - SURFACE_Y) * 1e6], axis=1),
+        np.stack([p1[:, 2] * 1e3, (p1[:, 1] - SURFACE_Y) * 1e6], axis=1),
+    ], axis=1)
+    seg_power = (power[segments[:, 0]] + power[segments[:, 1]]) / 2.0
+    power_max = power.max()
+    alpha = np.clip(seg_power / power_max, 0.0, 1.0) if power_max > 0 else np.zeros_like(seg_power)
+    alpha *= ray_max_opacity
+    colors = np.zeros((len(segments), 4))
+    colors[:, :3] = ray_color
+    colors[:, 3] = alpha
+
+    img = mpimg.imread(output_png)
+    h, w = img.shape[:2]
+    dpi = 100
+    fig = plt.figure(figsize=(w / dpi, h / dpi), dpi=dpi)
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.imshow(img, extent=(z_left_mm, z_right_mm, y_bottom_offset_um, y_top_offset_um), aspect='auto')
+    ax.set_xlim(z_left_mm, z_right_mm)
+    ax.set_ylim(y_bottom_offset_um, y_top_offset_um)
+    # Linewidth scaled with supersample, same reasoning as render_cutaway's
+    # own outline_tube_radius/world_per_px -- this is drawn in matplotlib
+    # points, which don't otherwise track a supersampled image's extra
+    # pixel density (fig's dpi is fixed at 100 regardless of supersample).
+    ax.add_collection(LineCollection(seg_xy, colors=colors, linewidths=0.6 * supersample))
+    ax.axis('off')
+    fig.savefig(output_png, dpi=dpi)
+    plt.close(fig)
+    log(f"Overlaid {len(segments)} ray segments (green, up to "
+        f"{ray_max_opacity * 100:.0f}% opacity by power)")
 
 
 def _trim_whitespace_bbox(img, pad=8):
@@ -1901,13 +2083,31 @@ def render_transverse(foam_file, time_value, output_png, output_pvsm):
 # constants, separate function, no shared state -- neither is touched by
 # this addition.
 # ═════════════════════════════════════════════════════════════════════════
-def render_cutaway(foam_file, time_value, output_png, output_pvsm):
+def render_cutaway(foam_file, time_value, output_png, output_pvsm, y_min=None, y_max=None, x_plane=None,
+                    grid=False, top_crop_frac=0.10, show_velocity=False, supersample=1, dotted_solidus=False,
+                    highlights=None, show_rays=False, show_section_velocity=False):
     FIELD_COLOR = 'x_coord'
-    CUTAWAY_X_PLANE = -0.025e-3  # m -- matches render_transverse's existing
-                                  # "blue" cross-section (X_CROSS_SECTIONS[0])
+    # x_plane: optional override of the cut plane itself (default matches
+    # render_transverse's existing "blue" cross-section, X_CROSS_SECTIONS[0]
+    # = -25um) -- same override pattern as y_min/y_max below, added for the
+    # same cutaway-collage caller which now wants a second set of frames at
+    # -30um alongside the original -25um set (user request, 2026-08-18).
+    CUTAWAY_X_PLANE = -0.025e-3 if x_plane is None else x_plane  # m
+    # y_min/y_max: optional per-call override of the shared Y_DEPTH_MIN/MAX
+    # crop, for callers (e.g. the cutaway-collage script) that need a wider
+    # window than the standard cutaway/cutaway3panel pipeline -- same
+    # "view-specific override, don't unify with the shared constant" idea
+    # as render_xray's own XRAY_Y_DEPTH_MAX, just parameterized instead of
+    # hardcoded since only this one new caller wants it (user request,
+    # 2026-08-18). None (the default) preserves existing behavior exactly.
+    y_min = Y_DEPTH_MIN if y_min is None else y_min
+    y_max = Y_DEPTH_MAX if y_max is None else y_max
 
     reader = OpenFOAMReader(FileName=foam_file)
-    reader.CellArrays = [FIELD_GM, FIELD_LS]
+    # 'U' only when needed -- extra field to read/interpolate for every
+    # other caller of this function otherwise (user request, 2026-08-21:
+    # prototype tangential-velocity arrows on the liquid surface).
+    reader.CellArrays = [FIELD_GM, FIELD_LS, 'U'] if (show_velocity or show_section_velocity) else [FIELD_GM, FIELD_LS]
     reader.Createcelltopointfiltereddata = 1
     reader.UpdatePipeline(time=time_value)
     log("reader loaded")
@@ -1916,14 +2116,32 @@ def render_cutaway(foam_file, time_value, output_png, output_pvsm):
     merged.UpdatePipeline(time=time_value)
     log("blocks merged")
 
+    # Cut away the far side of the domain (x < -150um) before any further
+    # processing -- same idea as the CUTAWAY_X_PLANE cut on the near side,
+    # just at the opposite extreme (user request, 2026-08-21). Applied this
+    # early (on `merged` itself, reassigned) so every downstream
+    # xmin-derived quantity (feature's own crop, camera framing, the
+    # x-color transfer function's blue endpoint) picks up the new,
+    # narrower domain automatically instead of needing a second adjustment.
+    CUTAWAY_X_FAR_LIMIT = -0.150e-3  # m
+    far_clip = Clip(Input=merged)
+    far_clip.ClipType = 'Plane'
+    far_clip.ClipType.Origin = [CUTAWAY_X_FAR_LIMIT, 0.0, 0.0]
+    far_clip.ClipType.Normal = [1.0, 0.0, 0.0]
+    far_clip.Invert = 0  # keep x >= CUTAWAY_X_FAR_LIMIT -- verified against
+                          # the logged bounds below, not just assumed
+    far_clip.UpdatePipeline(time=time_value)
+    merged = far_clip
+
     bounds = merged.GetDataInformation().GetBounds()
     xmin, xmax, ymin, ymax, zmin, zmax = bounds
-    log(f"Domain bounds: x=[{xmin},{xmax}] y=[{ymin},{ymax}] z=[{zmin},{zmax}]")
+    log(f"Domain bounds (after x<{CUTAWAY_X_FAR_LIMIT * 1e3:.3f}mm far-side cutaway): "
+        f"x=[{xmin},{xmax}] y=[{ymin},{ymax}] z=[{zmin},{zmax}]")
 
     laser_table = _load_laser_time_vs_position(os.path.dirname(foam_file))
     z_window_min, z_window_max = Z_VIEW_MIN, Z_VIEW_MAX
     log(f"Fixed crop window: x<{CUTAWAY_X_PLANE * 1e3:.3f}mm "
-        f"y=[{Y_DEPTH_MIN * 1e3:.3f},{Y_DEPTH_MAX * 1e3:.3f}]mm "
+        f"y=[{y_min * 1e3:.3f},{y_max * 1e3:.3f}]mm "
         f"z=[{z_window_min * 1e3:.3f},{z_window_max * 1e3:.3f}]mm")
 
     laser_z = _laser_z_at(laser_table, time_value)
@@ -1962,37 +2180,96 @@ def render_cutaway(foam_file, time_value, output_png, output_pvsm):
 
     # Melt-boundary outline at the cut plane itself, not x=0 -- x=0 sits
     # well outside the kept x<CUTAWAY_X_PLANE region now, so an x=0
-    # outline would mark a location that isn't shown at all. Same
-    # Slice-then-box-clip pattern as render_lateral's own _outline_at_x0.
-    def _outline_at_cut(contour):
-        s = Slice(Input=contour)
-        s.SliceType = 'Plane'
-        s.SliceType.Origin = [CUTAWAY_X_PLANE, (Y_DEPTH_MIN + Y_DEPTH_MAX) / 2.0, (z_window_min + z_window_max) / 2.0]
-        s.SliceType.Normal = [1.0, 0.0, 0.0]
-        s.UpdatePipeline(time=time_value)
-        c = Clip(Input=s)
+    # outline would mark a location that isn't shown at all.
+    #
+    # Slice-then-CONTOUR (not contour-then-slice, which is what this used
+    # to do): contouring FIELD_GM/FIELD_LS directly on the 2D cut-plane
+    # slice gives the boundary curve in one well-conditioned step, instead
+    # of first building the full 3D marching-cubes surface and then
+    # cutting *that* tessellated mesh with a plane (vtkCutter through a 3D
+    # mesh) -- near-tangent intersections through sliver triangles in that
+    # 3D mesh were fragmenting the outline into small disconnected dots/
+    # gaps (bug caught by user, 2026-08-21; the gaps were real, pre-dating
+    # the later LS_LINE_WIDTH*2 change, just less visible at the old
+    # thinner width). Same technique the phase-fill code below (and
+    # render_transverse) already uses for this same cut plane, just not
+    # applied to the outline curves until now.
+    outline_field_slice = Slice(Input=merged)
+    outline_field_slice.SliceType = 'Plane'
+    outline_field_slice.SliceType.Origin = [CUTAWAY_X_PLANE, (y_min + y_max) / 2.0, (z_window_min + z_window_max) / 2.0]
+    outline_field_slice.SliceType.Normal = [1.0, 0.0, 0.0]
+    outline_field_slice.UpdatePipeline(time=time_value)
+
+    outline_metal_clip = Clip(Input=outline_field_slice)
+    outline_metal_clip.ClipType = None
+    outline_metal_clip.Scalars = ['POINTS', FIELD_GM]
+    outline_metal_clip.Value = ISO_THRESHOLD
+    outline_metal_clip.Invert = 0
+    outline_metal_clip.UpdatePipeline(time=time_value)
+
+    gm_curve = Contour(Input=outline_field_slice)
+    gm_curve.ContourBy = ['POINTS', FIELD_GM]
+    gm_curve.Isosurfaces = [ISO_THRESHOLD]
+    gm_curve.UpdatePipeline(time=time_value)
+
+    ls_curve = Contour(Input=outline_metal_clip)
+    ls_curve.ContourBy = ['POINTS', FIELD_LS]
+    ls_curve.Isosurfaces = [LS_TSOLIDUS]
+    ls_curve.UpdatePipeline(time=time_value)
+
+    ls_liquidus_curve = Contour(Input=outline_metal_clip)
+    ls_liquidus_curve.ContourBy = ['POINTS', FIELD_LS]
+    ls_liquidus_curve.Isosurfaces = [LS_TLIQUIDUS]
+    ls_liquidus_curve.UpdatePipeline(time=time_value)
+
+    def _weld(curve):
+        """vtkCleanPolyData point-merging: Contour builds each line segment
+        independently per mesh cell, so two segments that are supposed to
+        share an endpoint often reference numerically-close-but-distinct
+        point instances instead of the same one. Thick Wireframe rendering
+        then draws each segment as its own independently-capped stroke,
+        leaving a visible sub-pixel gap at every such joint (bug caught by
+        user, 2026-08-21 -- persisted even after the slice-then-contour fix
+        above, since that fixed *fragmentation* from cutting a 3D mesh, not
+        this separate *unwelded-vertex* rendering issue). AbsoluteTolerance
+        1e-9m is far below the ~5um mesh resolution, so this only welds
+        points that were meant to be identical, not genuinely distinct
+        nearby mesh points."""
+        c = Clean(Input=curve)
+        c.ToleranceIsAbsolute = 1
+        c.AbsoluteTolerance = 1e-9
+        c.UpdatePipeline(time=time_value)
+        return c
+
+    gm_curve = _weld(gm_curve)
+    ls_curve = _weld(ls_curve)
+    ls_liquidus_curve = _weld(ls_liquidus_curve)
+
+    def _clip_curve_to_window(curve):
+        """Box-clip an already-2D cut-plane curve down to the visible
+        y/z window -- same bounds the old _outline_at_cut used, just no
+        slicing step here since curve is already flat at CUTAWAY_X_PLANE."""
+        c = Clip(Input=curve)
         c.ClipType = 'Box'
-        c.ClipType.Position = [CUTAWAY_X_PLANE - 1e-6, Y_DEPTH_MIN, z_window_min]
-        c.ClipType.Length = [2e-6, Y_DEPTH_MAX - Y_DEPTH_MIN, z_window_max - z_window_min]
+        c.ClipType.Position = [CUTAWAY_X_PLANE - 1e-6, y_min, z_window_min]
+        c.ClipType.Length = [2e-6, y_max - y_min, z_window_max - z_window_min]
         c.Invert = 1
         c.UpdatePipeline(time=time_value)
         return c
 
-    ls_slice_clip = _outline_at_cut(ls_contour)
+    ls_slice_clip = _clip_curve_to_window(ls_curve)
     ls_slice_poly = servermanager.Fetch(ls_slice_clip)
     log(f"Solidus outline at x={CUTAWAY_X_PLANE * 1e3:.3f}mm: {ls_slice_poly.GetNumberOfCells()} cells "
         f"(may be empty if no melt currently straddles this cut plane)")
 
-    ls_liquidus_slice_clip = _outline_at_cut(ls_liquidus_contour)
+    ls_liquidus_slice_clip = _clip_curve_to_window(ls_liquidus_curve)
     ls_liquidus_slice_poly = servermanager.Fetch(ls_liquidus_slice_clip)
     log(f"Liquidus outline at x={CUTAWAY_X_PLANE * 1e3:.3f}mm: {ls_liquidus_slice_poly.GetNumberOfCells()} cells "
         f"(may be empty if no melt currently straddles this cut plane)")
 
     # Gas/metal boundary outline at the cut plane too (user request,
-    # 2026-08-16) -- same _outline_at_cut() helper, sourced from gm_contour
-    # (already built above for the main surface) instead of the ls_*
-    # contours.
-    gm_slice_clip = _outline_at_cut(gm_contour)
+    # 2026-08-16).
+    gm_slice_clip = _clip_curve_to_window(gm_curve)
     gm_slice_poly = servermanager.Fetch(gm_slice_clip)
     log(f"Gas/metal outline at x={CUTAWAY_X_PLANE * 1e3:.3f}mm: {gm_slice_poly.GetNumberOfCells()} cells "
         f"(may be empty if x<CUTAWAY_X_PLANE has no metal at all in this window)")
@@ -2002,8 +2279,8 @@ def render_cutaway(foam_file, time_value, output_png, output_pvsm):
     # feature clip, which uses the full [xmin,xmax] x-range instead.
     feature = Clip(Input=gm_contour)
     feature.ClipType = 'Box'
-    feature.ClipType.Position = [xmin, Y_DEPTH_MIN, z_window_min]
-    feature.ClipType.Length = [CUTAWAY_X_PLANE - xmin, Y_DEPTH_MAX - Y_DEPTH_MIN, z_window_max - z_window_min]
+    feature.ClipType.Position = [xmin, y_min, z_window_min]
+    feature.ClipType.Length = [CUTAWAY_X_PLANE - xmin, y_max - y_min, z_window_max - z_window_min]
     feature.Invert = 1
     feature.UpdatePipeline(time=time_value)
     feature_poly = servermanager.Fetch(feature)
@@ -2016,15 +2293,26 @@ def render_cutaway(foam_file, time_value, output_png, output_pvsm):
     xcolor.Function = 'coordsX*1e3'  # meters -> mm
     xcolor.UpdatePipeline(time=time_value)
 
-    y_center = (Y_DEPTH_MIN + Y_DEPTH_MAX) / 2.0
+    y_center = (y_min + y_max) / 2.0
     z_center = (z_window_min + z_window_max) / 2.0
     x_center = (xmin + xmax) / 2.0
 
     view = GetActiveViewOrCreate('RenderView')
     view.OrientationAxesVisibility = 0
     view.Background = [1, 1, 1]
-    view.ViewSize = [max(1, round(VIEW_HEIGHT_PX * (z_window_max - z_window_min) / (Y_DEPTH_MAX - Y_DEPTH_MIN))), VIEW_HEIGHT_PX]
+    view.ViewSize = [max(1, round(VIEW_HEIGHT_PX * (z_window_max - z_window_min) / (y_max - y_min))), VIEW_HEIGHT_PX]
     view.ViewTime = time_value
+
+    # highlights: a list of (z0,z1,y0,y1,color) sub-boxes, used below to
+    # recolor the matching portions of the gm_outline curve (not the
+    # surface fill -- tried that first, user request, 2026-08-21: "that's
+    # not what I want", wanted the solid+liquid cross-section's outline
+    # *line* colored instead) that fall inside a panel's own ROI box(es)
+    # in the collage. Several panels can each carry their own highlight(s)
+    # in their own color (user request, 2026-08-21: red for topleft/
+    # topright, white for bottomleft, green+white for bottomright's two
+    # boxes) -- see _tube_outline_multi below.
+    highlights = highlights or []
 
     disp = Show(xcolor, view)
     disp.Representation = 'Surface'
@@ -2036,25 +2324,134 @@ def render_cutaway(foam_file, time_value, output_png, output_pvsm):
     # orthographic side view otherwise flattens away entirely, so it's the
     # more informative choice specifically for this panel.
     #
-    # Explicit transition bounds -- -125um to -25um (user request,
-    # 2026-08-17 -- prior attempts: +-0.12mm fit-to-visible-range,
-    # -0.1/+0.05mm, -0.1/0.0mm). TRANSITION_RED_MM now lands exactly on
-    # CUTAWAY_X_PLANE (-25um), so the cut plane itself -- the reddest
-    # point actually reached -- is fully saturated red, using the whole
-    # blue->red range across the visible surface instead of stopping
-    # short of it. x_min_mm (the true domain edge) stays the
-    # fully-saturated flat blue endpoint; the outer red endpoint is a
-    # dummy value just past TRANSITION_RED_MM, purely so RGBPoints'
-    # values stay strictly increasing -- real data never goes past it.
+    # Explicit transition bounds -- -135um to -35um (was -125/-25, user
+    # request, 2026-08-22, to match this collage's actual --x-plane-um=-35
+    # cut -- see below). Originally -125/-25 (user request, 2026-08-17 --
+    # prior attempts: +-0.12mm fit-to-visible-range, -0.1/+0.05mm,
+    # -0.1/0.0mm) so TRANSITION_RED_MM landed exactly on the *default*
+    # CUTAWAY_X_PLANE (-25um); the collage script overrides that default to
+    # -35um though, so -25um was actually past the real cut plane and the
+    # visible edge never quite reached full red. -35um now lands exactly on
+    # it again, so the cut plane itself -- the reddest point actually
+    # reached -- is fully saturated red, using the whole blue->red range
+    # across the visible surface instead of stopping short of it. x_min_mm
+    # (the true domain edge) stays the fully-saturated flat blue endpoint;
+    # the outer red endpoint is a dummy value just past TRANSITION_RED_MM,
+    # purely so RGBPoints' values stay strictly increasing -- real data
+    # never goes past it.
     x_min_mm = xmin * 1e3
-    TRANSITION_BLUE_MM = -0.125
-    TRANSITION_RED_MM = -0.025
+    TRANSITION_BLUE_MM = -0.135
+    TRANSITION_RED_MM = -0.035
     ctf.RGBPoints = [
         x_min_mm,                 0.0, 0.0, 1.0,
         TRANSITION_BLUE_MM,       0.0, 0.0, 1.0,
         TRANSITION_RED_MM,        1.0, 0.0, 0.0,
         TRANSITION_RED_MM + 0.01, 1.0, 0.0, 0.0,
     ]
+
+
+    # ── Prototype: tangential-velocity arrows on the liquid surface ──────
+    # (user request, 2026-08-21 -- "let's see how it looks"). Liquid-only
+    # (T>=liquidus) subset of `feature`, tangential component of U (full U
+    # minus its component along the local surface normal, so only in-plane
+    # "surface flow" shows, not material moving toward/away from the
+    # camera through the surface), sparsely sampled so arrows don't
+    # blanket the whole melt pool. ScaleFactor is picked from this frame's
+    # own actual |tangential U| range (not a fixed guess) so arrows land
+    # at a sane visible length regardless of how fast this particular
+    # frame's flow is.
+    # Shared arrow style constants -- both this surface-velocity block and
+    # the cross-section-velocity block further below (user request,
+    # 2026-08-22: "same size and format as the arrows ... shown at the
+    # surface") build their Glyphs from these same three values, so the two
+    # arrow families are guaranteed identical in length/density rather than
+    # just visually similar.
+    VELOCITY_STRIDE = round(88 / 1.5)  # "1.5 times as dense as the current
+                                    # state" (user feedback, 2026-08-21) --
+                                    # density scales as 1/stride, so stride
+                                    # shrinks from 88
+    VELOCITY_OFFSET = 5             # "different seed" -- MaskPoints has
+                                    # no RandomMode in this ParaView
+                                    # version, so a nonzero Offset (which
+                                    # points a given OnRatio stride
+                                    # starts counting from) is the
+                                    # deterministic, reproducible
+                                    # equivalent: same density, different
+                                    # subset of points (user feedback,
+                                    # 2026-08-21)
+    TARGET_ARROW_LEN_M = 90e-6 * 0.25  # "reduce sizes to 25%" (user
+                                    # feedback, 2026-08-21), was 90e-6
+
+    if show_velocity:
+        liquid_only = Clip(Input=feature)
+        liquid_only.ClipType = None
+        liquid_only.Scalars = ['POINTS', FIELD_LS]
+        liquid_only.Value = LS_TLIQUIDUS
+        liquid_only.Invert = 0
+        liquid_only.UpdatePipeline(time=time_value)
+
+        # Clip outputs vtkUnstructuredGrid; GenerateSurfaceNormals requires
+        # vtkPolyData, so re-extract the outer surface first.
+        liquid_surface = ExtractSurface(Input=liquid_only)
+        liquid_surface.UpdatePipeline(time=time_value)
+
+        normals = GenerateSurfaceNormals(Input=liquid_surface)
+        normals.UpdatePipeline(time=time_value)
+
+        tang = Calculator(Input=normals)
+        tang.AttributeType = 'Point Data'
+        tang.ResultArrayName = 'TangentialU'
+        tang.Function = 'U - (U.Normals)*Normals'
+        tang.UpdatePipeline(time=time_value)
+
+        tang_poly = servermanager.Fetch(tang)
+        n_liquid_pts = tang_poly.GetNumberOfPoints()
+        log(f"Liquid surface for velocity arrows: {n_liquid_pts} points")
+
+        # Exactly LIQUID_FILL_COLOR (defined later in this function, for the
+        # cut-plane phase fill) -- user request, 2026-08-21: "the same color
+        # that we have for liquid at the cross-section". Duplicated here
+        # (not referenced) since LIQUID_FILL_COLOR isn't defined yet at this
+        # point in the function; keep the two literals in sync if either changes.
+        VELOCITY_COLOR = [0.35, 0.35, 0.35]
+        if n_liquid_pts > 0:
+            tang_arr = tang_poly.GetPointData().GetArray('TangentialU')
+            mags = np.linalg.norm(vtk_to_numpy(tang_arr), axis=1) if tang_arr is not None else np.array([0.0])
+            max_mag = float(mags.max()) if mags.size else 0.0
+            log(f"Tangential U: max |v|={max_mag:.4g} m/s")
+        else:
+            max_mag = 0.0
+
+        if max_mag > 0:
+            mask = MaskPoints(Input=tang)
+            mask.OnRatio = VELOCITY_STRIDE
+            mask.Offset = VELOCITY_OFFSET
+            mask.GenerateVertices = 1
+            mask.UpdatePipeline(time=time_value)
+
+            # '2D Glyph'/Arrow -- flat line-drawn arrow, not the shaded 3D
+            # cone+cylinder 'Arrow' source (user request, 2026-08-21: "not
+            # a 3d object but simple line arrows").
+            glyph = Glyph(Input=mask, GlyphType='2D Glyph')
+            glyph.GlyphType.GlyphType = 'Arrow'
+            glyph.OrientationArray = ['POINTS', 'TangentialU']
+            # Uniform arrow length, not scaled by |tangential U| -- direction
+            # only, no magnitude-by-size (user request, 2026-08-21).
+            glyph.ScaleArray = ['POINTS', 'No scale array']
+            glyph.ScaleFactor = TARGET_ARROW_LEN_M
+            glyph.GlyphMode = 'All Points'
+            glyph.UpdatePipeline(time=time_value)
+
+            glyph_disp = Show(glyph, view)
+            glyph_disp.Representation = 'Surface'
+            glyph_disp.ColorArrayName = ['POINTS', '']
+            glyph_disp.AmbientColor = VELOCITY_COLOR
+            glyph_disp.DiffuseColor = VELOCITY_COLOR
+            glyph_disp.LineWidth = LS_LINE_WIDTH
+            log(f"Velocity glyphs: uniform ScaleFactor={glyph.ScaleFactor:.4g} "
+                f"({TARGET_ARROW_LEN_M * 1e6:.0f}um every arrow), stride={VELOCITY_STRIDE}")
+        else:
+            log("No liquid surface / zero velocity this frame -- skipping velocity glyphs")
 
     # Still safely in front of the visible (x<CUTAWAY_X_PLANE) content --
     # doesn't need to change just because the visible range shrank.
@@ -2121,8 +2518,8 @@ def render_cutaway(foam_file, time_value, output_png, output_pvsm):
         _outline_at_cut uses), then translate to x_marker."""
         c = Clip(Input=phase_result)
         c.ClipType = 'Box'
-        c.ClipType.Position = [CUTAWAY_X_PLANE - 1e-6, Y_DEPTH_MIN, z_window_min]
-        c.ClipType.Length = [2e-6, Y_DEPTH_MAX - Y_DEPTH_MIN, z_window_max - z_window_min]
+        c.ClipType.Position = [CUTAWAY_X_PLANE - 1e-6, y_min, z_window_min]
+        c.ClipType.Length = [2e-6, y_max - y_min, z_window_max - z_window_min]
         c.Invert = 1
         c.UpdatePipeline(time=time_value)
         t = Transform(Input=c)
@@ -2149,16 +2546,241 @@ def render_cutaway(foam_file, time_value, output_png, output_pvsm):
         phase_disp.AmbientColor = phase_color
         phase_disp.DiffuseColor = phase_color
 
+    # Cross-section velocity arrows: same idea as the surface-velocity
+    # block above, but flattened onto the flat cut-face slice instead of
+    # the exterior 3D surface, covering the combined mushy+liquid region
+    # there (user request, 2026-08-22: "white arrow in liquid + mushy
+    # region at the cross-section ... same size and format as the arrows
+    # ... shown at the surface"). The cut face's own "surface normal" is
+    # simply the x-axis (it's flat), so there's no need for
+    # GenerateSurfaceNormals/a per-point Normals array here -- ParaView's
+    # Calculator has a constant unit-vector iHat built in, so
+    # 'U - (U.iHat)*iHat' zeroes U's out-of-plane (x) component the same
+    # way the surface block's 'U - (U.Normals)*Normals' does with its own
+    # (per-point) normal. Built from metal_clip/_clip_temp/_fill_at_cut,
+    # already defined above for the phase fill, with one extra
+    # OUTLINE_FRONT_NUDGE step forward so the flat arrow glyphs don't
+    # z-fight with the flat fill quad they sit on top of (same reasoning as
+    # the outline curves' own x_marker+OUTLINE_FRONT_NUDGE).
+    if show_section_velocity:
+        liquid_mushy_slice = _clip_temp(metal_clip, LS_TSOLIDUS, 0)
+        liquid_mushy_final = _fill_at_cut(liquid_mushy_slice)
+        section_nudge = Transform(Input=liquid_mushy_final)
+        section_nudge.Transform = 'Transform'
+        section_nudge.Transform.Translate = [OUTLINE_FRONT_NUDGE, 0.0, 0.0]
+        section_nudge.UpdatePipeline(time=time_value)
+
+        planar = Calculator(Input=section_nudge)
+        planar.AttributeType = 'Point Data'
+        planar.ResultArrayName = 'PlanarU'
+        planar.Function = 'U - (U.iHat)*iHat'
+        planar.UpdatePipeline(time=time_value)
+
+        planar_poly = servermanager.Fetch(planar)
+        n_section_pts = planar_poly.GetNumberOfPoints()
+        log(f"Liquid+mushy cut-face region for section-velocity arrows: {n_section_pts} points")
+
+        SECTION_VELOCITY_COLOR = [1.0, 1.0, 1.0]  # white -- user request, 2026-08-22
+        if n_section_pts > 0:
+            planar_arr = planar_poly.GetPointData().GetArray('PlanarU')
+            section_mags = np.linalg.norm(vtk_to_numpy(planar_arr), axis=1) if planar_arr is not None else np.array([0.0])
+            section_max_mag = float(section_mags.max()) if section_mags.size else 0.0
+            log(f"Planar (cut-face) U: max |v|={section_max_mag:.4g} m/s")
+        else:
+            section_max_mag = 0.0
+
+        if section_max_mag > 0:
+            section_mask = MaskPoints(Input=planar)
+            section_mask.OnRatio = VELOCITY_STRIDE
+            section_mask.Offset = VELOCITY_OFFSET
+            section_mask.GenerateVertices = 1
+            section_mask.UpdatePipeline(time=time_value)
+
+            section_glyph = Glyph(Input=section_mask, GlyphType='2D Glyph')
+            section_glyph.GlyphType.GlyphType = 'Arrow'
+            section_glyph.OrientationArray = ['POINTS', 'PlanarU']
+            section_glyph.ScaleArray = ['POINTS', 'No scale array']
+            section_glyph.ScaleFactor = TARGET_ARROW_LEN_M
+            section_glyph.GlyphMode = 'All Points'
+            section_glyph.UpdatePipeline(time=time_value)
+
+            section_glyph_disp = Show(section_glyph, view)
+            section_glyph_disp.Representation = 'Surface'
+            section_glyph_disp.ColorArrayName = ['POINTS', '']
+            section_glyph_disp.AmbientColor = SECTION_VELOCITY_COLOR
+            section_glyph_disp.DiffuseColor = SECTION_VELOCITY_COLOR
+            section_glyph_disp.LineWidth = LS_LINE_WIDTH
+            log(f"Section-velocity glyphs: uniform ScaleFactor={section_glyph.ScaleFactor:.4g} "
+                f"({TARGET_ARROW_LEN_M * 1e6:.0f}um every arrow), stride={VELOCITY_STRIDE}")
+        else:
+            log("No liquid/mushy cut-face region / zero velocity this frame -- skipping section-velocity glyphs")
+
+    # 2x the shared LS_LINE_WIDTH, local to render_cutaway's own 3
+    # cut-plane outline curves only (not render_lateral's use of the same
+    # shared constant) -- user request, 2026-08-21: "the lines that are
+    # made at the cross-section (surface, and solidus and liquidus contour
+    # lines) also need to get twice thick".
+    CUTAWAY_OUTLINE_LINE_WIDTH = LS_LINE_WIDTH * 2 * 0.25  # 25% of the
+                                        # previous value (user feedback,
+                                        # 2026-08-21: "too thick")
+    DOTTED_SOLIDUS_COLOR = [0.1, 0.35, 0.95]  # blue, collage_v3 prototype
+
+    # Render these 3 outline curves as actual 3D tubes, not flat Wireframe
+    # lines (user request, 2026-08-21: "cut-offs" -- root cause turned out
+    # to be plain OpenGL line rendering's lack of joins between adjacent
+    # segments: Contour emits one independent 2-point line cell per mesh
+    # edge crossing, and at a sharp bend each segment's flat end-cap
+    # leaves a wedge-shaped gap at the joint -- worse at larger LineWidth,
+    # which is why doubling it made this newly visible. Point-welding
+    # (vtkCleanPolyData, tried first) does NOT fix this: it only merges
+    # coincident point *positions*, it doesn't turn independent line cells
+    # into connected polylines, so the flat per-segment caps were still
+    # there. A Tube filter sidesteps the whole issue -- real cylindrical
+    # geometry with its own end caps, no dependence on neighboring cells
+    # sharing a rendering primitive. World-space Radius is computed from
+    # the same pixel width the old LineWidth used, via this view's own
+    # world-units-per-pixel ratio, so it still looks like "an N-pixel-wide
+    # line" on screen regardless of supersample.
+    world_per_px = (y_max - y_min) * FRAME_MARGIN / VIEW_HEIGHT_PX
+    outline_tube_radius = (CUTAWAY_OUTLINE_LINE_WIDTH * world_per_px) / 2.0
+
+    def _stripped_producer(curve):
+        # Clip (used upstream in ls_slice_clip/gm_slice_clip's box-crop)
+        # outputs vtkUnstructuredGrid; Tube/Glyph require vtkPolyData.
+        surf = ExtractSurface(Input=curve)
+        surf.UpdatePipeline(time=time_value)
+        # Tube tried directly on `surf` first -- came out *worse*, a
+        # jagged "shark-tooth" mess (2026-08-21): Contour emits one
+        # independent 2-point line cell per mesh-edge crossing, never
+        # merged into continuous polylines, so Tube built a separate tiny
+        # capped cylinder per segment instead of one continuous tube.
+        # vtkStripper (not exposed as a paraview.simple proxy in this
+        # ParaView build, so called directly via raw vtk + fetch/
+        # TrivialProducer) joins those into maximal-length polylines
+        # first -- JoinContiguousSegmentsOn because our segments are only
+        # coincident-point-adjacent (via the earlier _weld/Clean pass),
+        # not already cell-adjacent.
+        poly = servermanager.Fetch(surf)
+        stripper = vtk.vtkStripper()
+        stripper.SetInputData(poly)
+        stripper.JoinContiguousSegmentsOn()
+        stripper.Update()
+        producer = servermanager.sources.TrivialProducer()
+        producer.GetClientSideObject().SetOutput(stripper.GetOutput())
+        producer.UpdatePipeline()
+        return producer
+
+    def _tube_outline(curve, color=LS_COLOR, radius=None):
+        producer = _stripped_producer(curve)
+        t = Tube(Input=producer)
+        t.Radius = outline_tube_radius if radius is None else radius
+        t.NumberofSides = 8
+        t.Capping = 1
+        t.UpdatePipeline(time=time_value)
+        disp = Show(t, view)
+        disp.Representation = 'Surface'
+        disp.ColorArrayName = ['POINTS', '']
+        disp.AmbientColor = color
+        disp.DiffuseColor = color
+        # Flat, unlit color instead of VTK's default Phong shading (user
+        # report, 2026-08-22: the highlighted outlines "share the same
+        # style that top of them is lighter and bottom is darker as they
+        # are 3D, I don't want that") -- Ambient=1/Diffuse=0 means the
+        # rendered color comes entirely from AmbientColor (constant,
+        # independent of the tube's surface normal/orientation to the
+        # light) rather than DiffuseColor (which is what produces the
+        # direction-dependent lighter/darker shading on curved geometry).
+        disp.Ambient = 1.0
+        disp.Diffuse = 0.0
+        return disp
+
+    def _tube_outline_multi(curve, base_color, highlight_specs):
+        """Same as _tube_outline, but each (z0,z1,y0,y1,color) box in
+        highlight_specs recolors (at 2x radius) the portion of the curve
+        that falls inside it -- one panel can carry several highlight
+        boxes, each its own color (user request, 2026-08-21: red/white/
+        green across topleft/topright/bottomleft/bottomright). Processed
+        one box at a time: each pass clips its own "inside" piece off of
+        whatever curve remains, so multiple boxes never fight over the
+        same segment. Whatever's left after all boxes gets base_color at
+        the normal radius.
+
+        curve's Transform.Translate is a RELATIVE offset (not an absolute
+        reposition), so its actual x is CUTAWAY_X_PLANE + x_marker + NUDGE
+        -- not just x_marker + NUDGE, which was the first (wrong) attempt
+        here: the box's x-range missed the curve entirely, so `inside` was
+        always empty."""
+        curve_x = CUTAWAY_X_PLANE + x_marker + OUTLINE_FRONT_NUDGE
+        remaining = curve
+        for z0, z1, y0, y1, color in highlight_specs:
+            hl_position = [curve_x - 1e-6, y0, z0]
+            hl_length = [2e-6, y1 - y0, z1 - z0]
+
+            inside = Clip(Input=remaining)
+            inside.ClipType = 'Box'
+            inside.ClipType.Position = hl_position
+            inside.ClipType.Length = hl_length
+            inside.Invert = 1  # keep inside the box
+            inside.UpdatePipeline(time=time_value)
+
+            outside = Clip(Input=remaining)
+            outside.ClipType = 'Box'
+            outside.ClipType.Position = hl_position
+            outside.ClipType.Length = hl_length
+            outside.Invert = 0  # keep outside the box
+            outside.UpdatePipeline(time=time_value)
+
+            inside_poly = servermanager.Fetch(inside)
+            log(f"Highlight: y=[{y0 * 1e6:.0f},{y1 * 1e6:.0f}]um "
+                f"z=[{z0 * 1e3:.3f},{z1 * 1e3:.3f}]mm color={color} -- "
+                f"{inside_poly.GetNumberOfPoints()} pts highlighted "
+                f"(0 means the box missed the curve -- check it against the panel's actual box coords)")
+            # A 'black' (== base_color/LS_COLOR) box is an *exclude* --
+            # reverting a stray fragment back to looking like normal,
+            # unhighlighted outline -- not an actual highlight, so it stays
+            # at the normal 1x radius instead of the 2x used for real
+            # colored highlights (user report, 2026-08-22: excluded regions
+            # were rendering visibly thicker than the surrounding outline).
+            is_exclude = color == [0.0, 0.0, 0.0]
+            _tube_outline(inside, color, radius=outline_tube_radius if is_exclude else outline_tube_radius * 2)
+            remaining = outside
+        _tube_outline(remaining, base_color)
+
+    def _dotted_outline(curve, color, dot_stride=6, dot_radius_factor=2.0):
+        """Small sphere glyphs spaced along the curve instead of a solid
+        tube -- a Tube has no dash-pattern equivalent (it's real 3D
+        geometry, not a 2D stroke), so "dotted" is built literally as a
+        series of dots (prototype, user request, 2026-08-21: dotted blue
+        solid-liquid interface for collage_v3)."""
+        producer = _stripped_producer(curve)
+        mask = MaskPoints(Input=producer)
+        mask.OnRatio = dot_stride
+        mask.GenerateVertices = 1
+        mask.UpdatePipeline(time=time_value)
+        glyph = Glyph(Input=mask, GlyphType='Sphere')
+        glyph.GlyphType.Radius = outline_tube_radius * dot_radius_factor
+        glyph.ScaleArray = ['POINTS', 'No scale array']
+        glyph.ScaleFactor = 1.0
+        glyph.GlyphMode = 'All Points'
+        glyph.UpdatePipeline(time=time_value)
+        disp = Show(glyph, view)
+        disp.Representation = 'Surface'
+        disp.ColorArrayName = ['POINTS', '']
+        disp.AmbientColor = color
+        disp.DiffuseColor = color
+        return disp
+
     ls_outline = Transform(Input=ls_slice_clip)
     ls_outline.Transform = 'Transform'
     ls_outline.Transform.Translate = [x_marker + OUTLINE_FRONT_NUDGE, 0.0, 0.0]
     ls_outline.UpdatePipeline(time=time_value)
-    ls_outline_disp = Show(ls_outline, view)
-    ls_outline_disp.Representation = 'Wireframe'
-    ls_outline_disp.ColorArrayName = ['POINTS', '']
-    ls_outline_disp.AmbientColor = LS_COLOR
-    ls_outline_disp.DiffuseColor = LS_COLOR
-    ls_outline_disp.LineWidth = LS_LINE_WIDTH
+    if dotted_solidus:
+        # "Solid-liquid interface" = the solidus curve (T=Tsolidus, where
+        # solid metal ends) -- distinct from the liquidus curve just below
+        # it, which stays a normal black tube.
+        ls_outline_disp = _dotted_outline(ls_outline, DOTTED_SOLIDUS_COLOR)
+    else:
+        ls_outline_disp = _tube_outline(ls_outline)
 
     # Liquidus now also LS_COLOR (black), not LS_LIQUIDUS_COLOR (gray) --
     # user request, 2026-08-16: solidus and liquidus both black. The 3
@@ -2168,36 +2790,104 @@ def render_cutaway(foam_file, time_value, output_png, output_pvsm):
     ls_liquidus_outline.Transform = 'Transform'
     ls_liquidus_outline.Transform.Translate = [x_marker + OUTLINE_FRONT_NUDGE, 0.0, 0.0]
     ls_liquidus_outline.UpdatePipeline(time=time_value)
-    ls_liquidus_outline_disp = Show(ls_liquidus_outline, view)
-    ls_liquidus_outline_disp.Representation = 'Wireframe'
-    ls_liquidus_outline_disp.ColorArrayName = ['POINTS', '']
-    ls_liquidus_outline_disp.AmbientColor = LS_COLOR
-    ls_liquidus_outline_disp.DiffuseColor = LS_COLOR
-    ls_liquidus_outline_disp.LineWidth = LS_LINE_WIDTH
+    ls_liquidus_outline_disp = _tube_outline(ls_liquidus_outline)
 
     gm_outline = Transform(Input=gm_slice_clip)
     gm_outline.Transform = 'Transform'
     gm_outline.Transform.Translate = [x_marker + OUTLINE_FRONT_NUDGE, 0.0, 0.0]
     gm_outline.UpdatePipeline(time=time_value)
-    gm_outline_disp = Show(gm_outline, view)
-    gm_outline_disp.Representation = 'Wireframe'
-    gm_outline_disp.ColorArrayName = ['POINTS', '']
-    gm_outline_disp.AmbientColor = LS_COLOR
-    gm_outline_disp.DiffuseColor = LS_COLOR
-    gm_outline_disp.LineWidth = LS_LINE_WIDTH
+    if highlights:
+        _tube_outline_multi(gm_outline, LS_COLOR, highlights)
+    else:
+        gm_outline_disp = _tube_outline(gm_outline)
 
     # Camera: identical to render_lateral -- looking down +x, up = -y.
     view.CameraParallelProjection = 1
     view.CameraViewUp = [0, -1, 0]
     view.CameraFocalPoint = [x_center, y_center, z_center]
     view.CameraPosition = [x_center + 2.0 * (xmax - xmin), y_center, z_center]
-    view.CameraParallelScale = (Y_DEPTH_MAX - Y_DEPTH_MIN) / 2.0 * FRAME_MARGIN
+    view.CameraParallelScale = (y_max - y_min) / 2.0 * FRAME_MARGIN
     Render(view)
 
-    SaveScreenshot(output_png, view, ImageResolution=view.ViewSize)
-    log(f"Saved: {output_png}")
+    # supersample: render at a multiple of view.ViewSize (ParaView scales
+    # line widths/fonts to match, not just pixel count) rather than at
+    # view.ViewSize itself -- fixes jagged/low-quality outline curves and
+    # (new, 2026-08-21) velocity arrows once the collage crops in tight on
+    # a sub-region; default 1 preserves every existing caller's output
+    # pixel-for-pixel (user request, 2026-08-21: "resolution ... too low").
+    render_res = [round(view.ViewSize[0] * supersample), round(view.ViewSize[1] * supersample)]
+    SaveScreenshot(output_png, view, ImageResolution=render_res)
+    log(f"Saved: {output_png} at {render_res} ({supersample}x)")
 
-    _clip_top_fraction(output_png, 0.10)
+    # Flatly overwrite the bottom 10% of the *raw* render with solid gray
+    # to mask a rendering artifact in the bottom-right corner (user report,
+    # 2026-08-22) -- done first, before any other post-processing (top
+    # crop/grid/rays/colorbar) touches the image, since those only add
+    # overlays or trim the *top* and would otherwise leave the corner
+    # artifact untouched underneath.
+    #
+    # Fill color is *sampled* from the image itself (just above the fill
+    # line, near the left edge -- the artifact is bottom-*right* only, so
+    # this stays clean) rather than using the literal SOLID_FILL_COLOR
+    # constant: VTK's default Phong shading renders that Ambient/
+    # DiffuseColor triple visibly lighter on-screen than its raw RGB
+    # values, so a hardcoded fill left a mismatched band (caught by eye
+    # once rendered, 2026-08-22) -- sampling guarantees a pixel-exact match
+    # regardless of how the renderer actually shades that flat fill.
+    img = mpimg.imread(output_png)
+    h_raw, w_raw = img.shape[:2]
+    fill_start_row = round(h_raw * 0.90)
+    sample_row = max(0, fill_start_row - 5)
+    sample_col = round(w_raw * 0.05)
+    fill_color = img[sample_row, sample_col, :3].copy()
+    img[fill_start_row:, :, :3] = fill_color
+    if img.shape[2] == 4:
+        img[fill_start_row:, :, 3] = 1.0
+    mpimg.imsave(output_png, img)
+    log(f"Filled bottom 10% ({h_raw - fill_start_row}px) with sampled gray {fill_color} to mask corner artifact")
+
+    CROP_FRAC = top_crop_frac
+    if CROP_FRAC:
+        _clip_top_fraction(output_png, CROP_FRAC)
+
+    if grid or show_rays:
+        # SURFACE_Y matches render_top's/main()'s own local constant.
+        # Re-derives the extent this frame was actually rendered at from
+        # the same camera/crop values just used above (view.ViewSize,
+        # view.CameraParallelScale, CROP_FRAC) rather than guessing --
+        # see _add_cutaway_grid's own docstring for why that matters. Shared
+        # between --grid and --rays since both need to place an overlay in
+        # this same physical-coordinate extent (user request, 2026-08-22).
+        SURFACE_Y = 0.2e-3
+        w0, h0 = view.ViewSize
+        cps_y = view.CameraParallelScale       # half-height, world units
+        cps_z = cps_y * (w0 / h0)              # half-width, world units (same aspect ratio)
+        cut = round(h0 * CROP_FRAC)
+        # Pre-crop top/bottom world y (row 0 / row h0-1); cropping removes
+        # rows [0,cut) from the top only, so only the top edge moves.
+        y_top_raw = y_center - cps_y
+        y_bottom_raw = y_center + cps_y
+        y_top_raw_postcrop = y_top_raw + cut * (y_bottom_raw - y_top_raw) / (h0 - 1)
+        z_left_mm, z_right_mm = (z_center - cps_z) * 1e3, (z_center + cps_z) * 1e3
+        y_top_offset_um = (y_top_raw_postcrop - SURFACE_Y) * 1e6
+        y_bottom_offset_um = (y_bottom_raw - SURFACE_Y) * 1e6
+
+        if grid:
+            _add_cutaway_grid(
+                output_png,
+                z_left_mm=z_left_mm, z_right_mm=z_right_mm,
+                y_top_offset_um=y_top_offset_um, y_bottom_offset_um=y_bottom_offset_um,
+                time_us=time_value * 1e6,
+            )
+
+        if show_rays:
+            _overlay_rays_on_cutaway(
+                output_png, os.path.dirname(foam_file), time_value, ymin,
+                z_left_mm=z_left_mm, z_right_mm=z_right_mm,
+                y_top_offset_um=y_top_offset_um, y_bottom_offset_um=y_bottom_offset_um,
+                supersample=supersample,
+            )
+
     # Colorbar's title+bar rendered as usual (top-right placement,
     # labels_above=False (trying it back at the default -- below the bar,
     # like every other caller -- user request, 2026-08-17, to compare
@@ -2235,7 +2925,7 @@ def render_cutaway(foam_file, time_value, output_png, output_pvsm):
     ]
     _overlay_colorbar(cbar_ctf, 'x (μm)', output_png,
                        custom_labels=[TRANSITION_BLUE_MM * UM_PER_MM, TRANSITION_RED_MM * UM_PER_MM],
-                       labels_above=False, skip_overlay=True)
+                       labels_above=False, skip_overlay=True, thickness_scale=1.5)
 
     if output_pvsm:
         SaveState(output_pvsm)
@@ -2770,6 +3460,58 @@ def main():
     parser.add_argument('time', type=float)
     parser.add_argument('output_png')
     parser.add_argument('output_pvsm', nargs='?', default=None)
+    parser.add_argument('--y-min-um', type=float, default=None,
+                         help="cutaway view only: override the y-crop lower bound "
+                              "(um, relative to nominal surface; negative = above "
+                              "surface). Defaults to the shared Y_DEPTH_MIN if omitted.")
+    parser.add_argument('--y-max-um', type=float, default=None,
+                         help="cutaway view only: override the y-crop upper bound "
+                              "(um, relative to nominal surface). Defaults to the "
+                              "shared Y_DEPTH_MAX if omitted.")
+    parser.add_argument('--x-plane-um', type=float, default=None,
+                         help="cutaway view only: override the cut plane (um). "
+                              "Defaults to -25 (matches render_transverse's "
+                              "X_CROSS_SECTIONS[0]) if omitted.")
+    parser.add_argument('--grid', action='store_true',
+                         help="cutaway view only: also save a *_grid.png copy with a "
+                              "z(mm)/y-offset-from-surface(um) coordinate grid overlaid, "
+                              "as an annotation-planning aid. Original output_png is untouched.")
+    parser.add_argument('--top-crop-frac', type=float, default=0.10,
+                         help="cutaway view only: fraction of the raw render's top rows to "
+                              "discard (default 0.10, matching the standard cutaway/cutaway3panel "
+                              "pipeline). Pass 0 to keep the full requested y-window uncropped -- "
+                              "needed when the top of the y-range is meant to show as blank white "
+                              "(e.g. the collage panels' y-min sitting above the domain's real "
+                              "edge) rather than being silently trimmed away.")
+    parser.add_argument('--velocity', action='store_true',
+                         help="cutaway view only: overlay tangential-velocity arrows (green) on "
+                              "the liquid portion of the surface -- prototype, 2026-08-21.")
+    parser.add_argument('--supersample', type=int, default=1,
+                         help="cutaway view only: render at this multiple of the normal pixel "
+                              "resolution (ParaView scales line widths/fonts to match), for "
+                              "sharper outline curves/arrows once cropped in tight for a collage. "
+                              "Default 1 (no change).")
+    parser.add_argument('--dotted-solidus', action='store_true',
+                         help="cutaway view only: draw the solidus (solid-liquid interface) curve "
+                              "as a dotted blue line of small spheres instead of a solid black tube "
+                              "-- prototype, 2026-08-21, for collage_v3.")
+    parser.add_argument('--highlight', action='append', default=[],
+                         help="cutaway view only: recolor the gm_outline curve inside a (z,y) box. "
+                              "Repeatable -- one panel can carry several, each its own color. "
+                              "Format: z0,z1,y0,y1,color -- z in mm, y as an offset from the "
+                              "nominal surface in um (same convention as --y-min-um/--y-max-um), "
+                              "color one of red/white/green.")
+    parser.add_argument('--rays', action='store_true',
+                         help="cutaway view only: overlay laser ray-tracing segments (dark red, "
+                              "0-25%% opacity scaled by each segment's power) from the solver's "
+                              "VTKs/rays_laser0.vtk.series, if this case has one -- prototype, "
+                              "2026-08-22, for collage_v3. No-ops (with a log line) if the case "
+                              "has no ray VTK series.")
+    parser.add_argument('--section-velocity', action='store_true',
+                         help="cutaway view only: overlay flow-direction arrows (white) across the "
+                              "combined mushy+liquid region of the flat cut-face slice, same size/"
+                              "density/style as --velocity's surface arrows -- for collage_v4, "
+                              "2026-08-22.")
     args = parser.parse_args()
 
     if args.view == 'top':
@@ -2779,7 +3521,46 @@ def main():
     elif args.view == 'transverse':
         render_transverse(args.case_foam, args.time, args.output_png, args.output_pvsm)
     elif args.view == 'cutaway':
-        render_cutaway(args.case_foam, args.time, args.output_png, args.output_pvsm)
+        # SURFACE_Y matches render_top's own local constant -- nominal
+        # flat-plate surface height, see topoSetDict's "y surface (0.2mm)"
+        # and setFieldsDict's "metal: y=0.2mm to 0.5mm; 0.2mm gas above".
+        # --y-min-um/--y-max-um are offsets from this surface (negative =
+        # above surface/gas side, positive = below surface/metal side,
+        # same sign convention as render_top's own y-offset coloring) --
+        # NOT raw domain y, which is what these silently did before this
+        # fix (bug caught by user, 2026-08-18: a requested +-300um window
+        # rendered mostly blank because it was centered on raw y=0, which
+        # is actually 200um *above* the true surface, not on the surface
+        # itself).
+        SURFACE_Y = 0.2e-3
+        y_min = SURFACE_Y + args.y_min_um * 1e-6 if args.y_min_um is not None else None
+        y_max = SURFACE_Y + args.y_max_um * 1e-6 if args.y_max_um is not None else None
+        x_plane = args.x_plane_um * 1e-6 if args.x_plane_um is not None else None
+        HIGHLIGHT_COLORS = {
+            'red': [1.0, 0.639, 0.867],         # matches the collage script's PROTRUSION_LABEL_COLOR (#FFA3DD,
+                                                 # a light pink -- user tried this directly, 2026-08-22, after the
+                                                 # crimson #e6005a fixed the same low-contrast complaint)
+            'white': [1.0, 1.0, 1.0],
+            'green': [0.7176, 0.9608, 0.5569],  # matches the collage script's PORE0_LABEL_COLOR (#b7f58e)
+            'blue': [0.5569, 0.8039, 0.9608],   # matches the collage script's CONTACT_LABEL_COLOR/BOX_COLOR (#8ecdf5)
+            'pore2': [0.5838, 0.9608, 0.5569],  # matches the collage script's PORE1_LABEL_COLOR (#95f58e)
+            'black': [0.0, 0.0, 0.0],           # explicit "un-highlight"/exclude; must be listed
+                                                 # BEFORE the larger box it should carve out of
+        }
+        highlights = []
+        for spec in args.highlight:
+            z0_mm, z1_mm, y0_um, y1_um, color = spec.split(',')
+            highlights.append((
+                float(z0_mm) * 1e-3, float(z1_mm) * 1e-3,
+                SURFACE_Y + float(y0_um) * 1e-6, SURFACE_Y + float(y1_um) * 1e-6,
+                HIGHLIGHT_COLORS[color],
+            ))
+        render_cutaway(args.case_foam, args.time, args.output_png, args.output_pvsm,
+                        y_min=y_min, y_max=y_max, x_plane=x_plane, grid=args.grid,
+                        top_crop_frac=args.top_crop_frac, show_velocity=args.velocity,
+                        supersample=args.supersample, dotted_solidus=args.dotted_solidus,
+                        highlights=highlights, show_rays=args.rays,
+                        show_section_velocity=args.section_velocity)
     elif args.view == 'xray':
         if args.output_pvsm:
             log("Note: --view=xray never had a ParaView state to save; ignoring output_pvsm arg.")
