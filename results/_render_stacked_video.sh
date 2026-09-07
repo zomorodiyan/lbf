@@ -159,7 +159,7 @@ for t in "${TIMES[@]}"; do
   f="results/${PREFIX}_stacked_t${t}.png"
   if [ -f "$f" ]; then
     echo "file '/workspace/$f'" >> "$CONCAT_LIST"
-    echo "duration 0.2" >> "$CONCAT_LIST"
+    echo "duration 0.8" >> "$CONCAT_LIST"
   fi
 done
 # concat demuxer quirk: the last file's duration is ignored, so repeat it once more

@@ -98,7 +98,7 @@ for t in "${TIMES[@]}"; do
   f="results/${PREFIX}_cutaway_updated_t${t}.png"
   if [ -f "$f" ]; then
     echo "file '/workspace/$f'" >> "$CONCAT_LIST"
-    echo "duration 0.4" >> "$CONCAT_LIST"
+    echo "duration 0.8" >> "$CONCAT_LIST"
   fi
 done
 LAST_LINE=$(tail -2 "$CONCAT_LIST" | head -1)
