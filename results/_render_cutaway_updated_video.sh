@@ -105,7 +105,17 @@ LAST_LINE=$(tail -2 "$CONCAT_LIST" | head -1)
 echo "$LAST_LINE" >> "$CONCAT_LIST"
 
 VIDEO_OUT="results/${PREFIX}_cutaway_updated_video.mp4"
+# -r 10 -vsync cfr (instead of -vsync vfr): the concat demuxer's per-frame
+# "duration" directives alone produce a variable-frame-rate stream -- sparse,
+# irregularly-timed packets with an unpredictable (often single, video-long)
+# keyframe/GOP structure. Players that play it back sequentially are fine,
+# but seeking/scrubbing (e.g. dragging VLC's timeline) has to decode from
+# whatever keyframe it can find, which reads as the video "jumping around".
+# Resampling to a real constant frame rate here (duplicating each source
+# frame ~8x at 10fps to preserve the same 0.8s-per-source-frame pacing) plus
+# -g 10 (one keyframe/second) gives every player a normal, evenly-spaced
+# frame/keyframe structure to seek against.
 docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd)":/workspace lbf3 bash -lc \
-  "ffmpeg -y -f concat -safe 0 -i /workspace/$CONCAT_LIST -vf 'scale=trunc(iw/2)*2:trunc(ih/2)*2' -vsync vfr -pix_fmt yuv420p -c:v libx264 -crf 18 /workspace/$VIDEO_OUT"
+  "ffmpeg -y -f concat -safe 0 -i /workspace/$CONCAT_LIST -vf 'scale=trunc(iw/2)*2:trunc(ih/2)*2' -r 10 -vsync cfr -g 10 -pix_fmt yuv420p -c:v libx264 -crf 18 /workspace/$VIDEO_OUT"
 
 echo "VIDEO DONE: $VIDEO_OUT"
