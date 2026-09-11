@@ -2,7 +2,8 @@
 
 Who runs what, and in what order, for the four T0 lineages prepared in
 [T0_sweep.md](T0_sweep.md) — read that doc first for what these cases are, why the fork stage
-carries testrun69's surface-tension remedy, and the exact reconstruct→copy→decompose hand-off
+carries testrun69's surface-tension baseline (sigma=0.95, adopted as standard — see
+[vdep_remedy_sims.md](vdep_remedy_sims.md)), and the exact reconstruct→copy→decompose hand-off
 procedure (same one used in [vdep_power_sweep.md](vdep_power_sweep.md)). This doc only covers
 who runs which lineage and in what sequence.
 
@@ -52,7 +53,7 @@ docker run --rm --shm-size=32g --ulimit memlock=-1 --ulimit stack=67108864 \
   -v $(pwd):/workspace lbf3 bash -lc \
   "cd /workspace/tutorials/laserbeamFoam/vdep/testrunNN_vdep_3_Al && bash ./Allrun && echo RUN_COMPLETE"
 ```
-seed1 runs to `endTime=100µs` (650W); the fork runs to `endTime=400µs` (750W + sigma remedy).
+seed1 runs to `endTime=100µs` (650W); the fork runs to `endTime=400µs` (750W, sigma=0.95 baseline).
 
 ## After each lineage finishes
 

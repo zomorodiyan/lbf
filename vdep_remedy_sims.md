@@ -11,7 +11,7 @@ task_Aug4.md — this file only covers the run mechanics. Generic Docker mechani
 | Case | Remedy | Change | Owner |
 |---|---|---|---|
 | `testrun68_vdep_3_Al` | Recoil pressure cap | `Tcap = 3800 K` (new case-configurable parameter) | Mehrdad |
-| `testrun69_vdep_3_Al` | Surface tension | `sigma: 0.87 → 0.95 N/m` | Mehrdad |
+| `testrun69_vdep_3_Al` | Surface tension | `sigma: 0.87 → 0.95 N/m` (adopted as standard baseline — see below) | Mehrdad |
 | `testrun70_vdep_3_Al` | Beam quality | `Radius_Flavour: 1.336 → 0.7` | Zixun |
 
 All three fork from **testrun61** (100µs, 32-core seed — same lineage as the production forks
@@ -165,6 +165,13 @@ No solver change needed — runs on the stock `lbf3` image. Edit `constant/trans
 ```
 sigma 0.95;  // was 0.87
 ```
+Unlike testrun68/70, this one was **adopted as the standard sigma value going forward**, not left
+as a one-off sensitivity test — every stage of every T0-sweep lineage (testrun73–84,
+[T0_sweep.md](T0_sweep.md)) uses `sigma=0.95`, and testrun69 itself is the 300K fork-stage member
+of that same sweep (its own seed0/seed1, testrun60/61, still carry the original `sigma=0.87` since
+they predate the change). Treat `sigma=0.95` as the current baseline, not a "remedy" under test —
+that word only still applies to testrun68's Tcap cap and testrun70's Radius_Flavour, which remain
+isolated sensitivity checks against testrun64's original baseline.
 
 ### testrun70 — beam quality
 No solver change needed. Edit `constant/LaserProperties`:

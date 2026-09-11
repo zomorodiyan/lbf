@@ -59,7 +59,7 @@ rho             1;
 
 
 
-sigma            0.95;      // testrun69 remedy: was 0.87 (clean-Al, Molina et al.) --
+sigma            0.95;      // surface-tension baseline (from testrun69): was 0.87 (clean-Al, Molina et al.) --
                              // raised to 0.95 (their oxide-covered-surface estimate).
                              // Applied to every stage in this T0 lineage, not just the
                              // fork, so only T0 varies step-to-step. See task_Aug4.md.

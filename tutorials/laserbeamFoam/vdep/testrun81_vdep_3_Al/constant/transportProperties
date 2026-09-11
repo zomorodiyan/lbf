@@ -59,7 +59,7 @@ rho             1;
 
 
 
-sigma            0.95;      // testrun69 remedy: was 0.87 (clean-Al, Molina et al.) --
+sigma            0.95;      // surface-tension baseline (from testrun69): was 0.87 (clean-Al, Molina et al.) --
                              // raised to 0.95 (their oxide-covered-surface estimate).
                              // See task_Aug4.md.
 Marangoni_Constant	-1.5e-4;   // Al 6061 dsigma/dT, N/(m.K)

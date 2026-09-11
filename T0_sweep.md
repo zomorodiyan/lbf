@@ -1,8 +1,8 @@
 # VDEP initial-temperature sweep (testrun73–testrun84)
 
 How to run the T0-sweep case set. Generic Docker mechanics: [TESTRUNS.md](TESTRUNS.md). Seed→fork
-hand-off procedure (reused verbatim below): [vdep_power_sweep.md](vdep_power_sweep.md). Remedy
-baseline this sweep forks from: [vdep_remedy_sims.md](vdep_remedy_sims.md).
+hand-off procedure (reused verbatim below): [vdep_power_sweep.md](vdep_power_sweep.md).
+Surface-tension baseline (sigma=0.95) this sweep forks from: [vdep_remedy_sims.md](vdep_remedy_sims.md).
 
 ## Purpose
 
@@ -18,16 +18,26 @@ independent 3-stage lineage, structured exactly like testrun60→61→(750 W for
 | fork | continuation | 100–400µs | 750 W | testrun69 | seeded from this T0's own seed1 |
 
 The fork stage is a copy of **testrun69** (not testrun64) — same 750 W power, same
-`metalVolume` mass-conservation monitor. testrun69's surface-tension remedy (`sigma: 0.87→0.95`)
+`metalVolume` mass-conservation monitor. testrun69's surface-tension baseline (`sigma: 0.87→0.95`,
+adopted as the standard value going forward — see [vdep_remedy_sims.md](vdep_remedy_sims.md))
 is applied to **every stage of every lineage** here, including seed0 and seed1 (which otherwise
 came from the testrun60/61 templates at the unmodified `sigma=0.87`) — so sigma=0.95 is constant
 across all three stages and all four T0 values, and only T0 itself varies step-to-step within a
 lineage.
 
+Note: testrun69 is itself the 300 K fork-stage member of this same sweep (its lineage is
+testrun60→61→69). That lineage is the one asymmetric case, though: testrun60/61 (its own
+seed0/seed1) predate the sigma change and still carry the original `sigma=0.87` — only the fork
+stage (testrun69) has `sigma=0.95`. The four lineages below (100/200/400/500 K) don't have that
+asymmetry; they have `sigma=0.95` from seed0 onward.
+
 ## Case table
 
 | Case | T0 | Role | Time window | Power | Sigma | Seeded from |
 |---|---|---|---|---|---|---|
+| `testrun60_vdep_3_Al` | 300 K | seed0 | 0–20µs | 1000 W | 0.87 | fresh build |
+| `testrun61_vdep_3_Al` | 300 K | seed1 | 20–100µs | 650 W | 0.87 | testrun60 |
+| `testrun69_vdep_3_Al` | 300 K | fork | 100–400µs | 750 W | 0.95 | testrun61 |
 | `testrun73_vdep_3_Al` | 100 K | seed0 | 0–20µs | 1000 W | 0.95 | fresh build |
 | `testrun74_vdep_3_Al` | 100 K | seed1 | 20–100µs | 650 W | 0.95 | testrun73 |
 | `testrun75_vdep_3_Al` | 100 K | fork | 100–400µs | 750 W | 0.95 | testrun74 |
@@ -63,31 +73,30 @@ Relative to the testrun60/61/69 templates, three things were edited:
 Nothing else (LaserProperties, timeVsLaserPosition, timeVsLaserPower, mesh dicts, decomposeParDict)
 depends on T0 — confirmed by diffing testrun73/75/84 against their testrun60/61/69 templates.
 
-## Current status (as of 2026-08-23)
+## Current status (as of 2026-09-11)
 
-**Only the case directories/dictionaries have been prepared — nothing has been run.** Per
-[CLAUDE.md](CLAUDE.md), never run a simulation without asking the user first.
+The 100 K and 200 K lineages are complete; 400 K and 500 K have not been started.
 
-- seed0 stages (testrun73/76/79/82) are complete, ready-to-run fresh builds — same
-  `blockMesh` → `topoSet`×3/`refineHexMesh` → `setFields` → `decomposePar` → `laserbeamFoam`
-  `Allrun` as testrun60.
-- seed1 and fork stages (testrun74/75/77/78/80/81/83/84) have only their `constant/`+`system/`
-  dictionaries and `Allrun`/`Allclean` copied in — they have **no `constant/polyMesh`, no
-  decomposed `processor*/`, no seed timestep yet**. Each needs the same reconstruct → copy
-  `constant/polyMesh` + latest timestep → `decomposePar` → `checkMesh` hand-off documented in
-  vdep_power_sweep.md's "Hand-off validated" section and reused in vdep_remedy_sims.md, run from
-  its own T0 lineage predecessor (e.g. testrun74 seeds from testrun73's reconstructed 20µs state,
-  *not* from testrun61).
+| T0 | Lineage | Status |
+|---|---|---|
+| 100 K | testrun73→74→75 | complete, fork reached endTime=400µs |
+| 200 K | testrun76→77→78 | complete, fork reached endTime=400µs |
+| 400 K | testrun79→80→81 | not started |
+| 500 K | testrun82→83→84 | not started |
+
+All twelve case directories have their config (`constant/`+`system/`, `Allrun`/`Allclean`) tracked
+in git; mesh/results/logs are not committed, same convention as testrun69/71.
 
 ## Next steps for whoever picks this up
 
-1. Run the four seed0 stages (testrun73/76/79/82) — can run sequentially or up to 2 at a time per
-   TASK_vdep.md's concurrency guidance (severe slowdown beyond that).
-2. Hand off each seed0 → its own seed1 (testrun73→74, 76→77, 79→80, 82→83), run seed1.
-3. Hand off each seed1 → its own fork (testrun74→75, 77→78, 80→81, 83→84), run the fork to
-   `endTime=400µs`.
+Only the 400 K and 500 K lineages remain:
+
+1. Run the two remaining seed0 stages (testrun79/82) — can run sequentially or up to 2 at a time
+   per TASK_vdep.md's concurrency guidance (severe slowdown beyond that).
+2. Hand off each seed0 → its own seed1 (testrun79→80, 82→83), run seed1.
+3. Hand off each seed1 → its own fork (testrun80→81, 83→84), run the fork to `endTime=400µs`.
 4. Reconstruct and post-process with `results/_render_stacked_video.sh <NN>`, same as the power
-   sweep.
+   sweep and the completed 100 K/200 K lineages.
 
 Ask the user (Mehrdad) before launching any of the above — this doc only covers what was prepared,
 not authorization to run.
