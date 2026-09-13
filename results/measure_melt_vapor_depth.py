@@ -168,7 +168,12 @@ def main():
     ap.add_argument('--t-end', type=float, default=None, help='s, restrict analysis to t <= this')
     ap.add_argument('--steady-frac', type=float, default=0.5,
                      help='fraction of the analyzed time range (from the end) treated as the '
-                          'quasi-steady window for the time-average. Default 0.5 = latter half.')
+                          'quasi-steady window for the time-average. Default 0.5 = latter half. '
+                          'Ignored if --steady-start is given.')
+    ap.add_argument('--steady-start', type=float, default=None,
+                     help='s, absolute start time of the quasi-steady window (overrides '
+                          '--steady-frac). e.g. 0.0002 for a fixed 200us-to-end window, '
+                          'independent of each case\'s own total run length.')
     ap.add_argument('--z-window-um', type=float, default=300.0,
                      help='full width (um) of the z-window centered on the laser position that '
                           'h_mp/d_vd are searched within, per timestep')
@@ -206,7 +211,7 @@ def main():
               f"d_vd={d_vd:7.1f}um  laser_z={laser_z * 1e3:.3f}mm")
 
     t0, t1 = times[0], times[-1]
-    steady_t0 = t1 - args.steady_frac * (t1 - t0)
+    steady_t0 = args.steady_start if args.steady_start is not None else t1 - args.steady_frac * (t1 - t0)
     steady_rows = [r for r in rows if r[0] >= steady_t0]
     h_mp_vals = np.array([r[1] for r in steady_rows if not np.isnan(r[1])])
     d_vd_vals = np.array([r[2] for r in steady_rows if not np.isnan(r[2])])
