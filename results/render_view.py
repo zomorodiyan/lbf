@@ -859,21 +859,22 @@ def _resize_image(img, new_height):
     return buf
 
 
-def _draw_cross_section_markers_top(view, y_marker, z_window_min, z_window_max):
-    """Dashed line marker for CROSS_SECTION_X[0] (the -25um cut the
-    cutaway view uses), spanning [z_window_min, z_window_max] at that
-    fixed x, placed at y=y_marker -- nearer the camera than any real
-    geometry (see render_top's own header), so never occluded.
+def _draw_dashed_x_line(view, x_cut, y_marker, z_window_min, z_window_max, color=(0.0, 0.0, 0.0)):
+    """Dashed line marker at a fixed x=x_cut, spanning [z_window_min,
+    z_window_max], placed at y=y_marker -- nearer the camera than any real
+    geometry (see each caller's own header), so never occluded. Shared by
+    render_top's own single cross-section marker and render_bottom's pair
+    of lateral-crop-range markers.
 
-    Black, dashed (user request, 2026-08-17, replacing the earlier solid
-    dark-blue marker -- "change the cross-section blue line to a better
-    representative... like a very professional article figure... this
-    line is defining the second view"): a dashed reference/cutting-plane
-    line is the standard convention in technical and scientific figures
-    for "this marks a section plane," distinct from a solid line (which
-    reads as a real geometric edge) -- and black stays legible against
-    the top view's own blue/purple/orange/red data coloring, where a blue
-    line would visually compete with it.
+    Black by default (user request, 2026-08-17, replacing the earlier
+    solid dark-blue marker -- "change the cross-section blue line to a
+    better representative... like a very professional article figure...
+    this line is defining the second view"): a dashed reference/
+    cutting-plane line is the standard convention in technical and
+    scientific figures for "this marks a section plane," distinct from a
+    solid line (which reads as a real geometric edge) -- and black stays
+    legible against these views' own blue/purple/orange/red data coloring,
+    where a blue line would visually compete with it.
 
     Built as many short, separate Line segments with gaps, not one
     continuous line with a dash *style* applied -- ParaView's modern
@@ -883,21 +884,10 @@ def _draw_cross_section_markers_top(view, y_marker, z_window_min, z_window_max):
     rewrite; matches this file's own experience elsewhere, e.g.
     render_lateral's outline lines are solid-only for the same reason).
 
-    Was 3 markers (one per CROSS_SECTION_X, spanning the narrower
-    CROSS_SECTION_Z_WINDOW) -- reduced to just this one, and extended to
-    the caller's full z-range instead (user request, 2026-08-16: drop the
-    x=0/+25um markers and the old narrow z-window, both leftovers from
-    render_transverse's old 3-cut design, which isn't what's being
-    cross-referenced here anymore -- extend the remaining line the full
-    z-range so it reads as "the plane the cutaway view cuts along").
-    render_top now calls this with Z_VIEW_MIN/MAX, not CROSS_SECTION_Z_WINDOW.
-
     Flat-colored, not scalar-colored: ColorArrayName=['POINTS',''], not
     ColorBy(rep, None) -- the latter crashes when there's no array to
     default to (relevant here since these Line sources carry no data).
     """
-    x_cut = CROSS_SECTION_X[0]
-    DASH_COLOR = [0.0, 0.0, 0.0]
     DASH_LEN_M = 0.06e-3
     GAP_LEN_M = 0.04e-3
     n_dashes = 0
@@ -908,8 +898,8 @@ def _draw_cross_section_markers_top(view, y_marker, z_window_min, z_window_max):
         disp = Show(marker, view)
         disp.Representation = 'Wireframe'
         disp.ColorArrayName = ['POINTS', '']
-        disp.AmbientColor = DASH_COLOR
-        disp.DiffuseColor = DASH_COLOR
+        disp.AmbientColor = list(color)
+        disp.DiffuseColor = list(color)
         disp.LineWidth = GM_RIM_LINE_WIDTH * 2  # 2x the shared constant, just
                                                  # for this marker (user
                                                  # request, 2026-08-17) -- not
@@ -920,8 +910,24 @@ def _draw_cross_section_markers_top(view, y_marker, z_window_min, z_window_max):
                                                  # which wasn't asked to change
         z += DASH_LEN_M + GAP_LEN_M
         n_dashes += 1
-    log(f"Cross-section marker: x={x_cut*1e6:+.1f}um -> {n_dashes} dashes at "
+    log(f"Dashed x-line marker: x={x_cut*1e6:+.1f}um -> {n_dashes} dashes at "
         f"y={y_marker*1e3:.3f}mm, z=[{z_window_min*1e3:.3f},{z_window_max*1e3:.3f}]mm")
+
+
+def _draw_cross_section_markers_top(view, y_marker, z_window_min, z_window_max):
+    """render_top's own single dashed marker at CROSS_SECTION_X[0] (the
+    -25um cut the cutaway view uses).
+
+    Was 3 markers (one per CROSS_SECTION_X, spanning the narrower
+    CROSS_SECTION_Z_WINDOW) -- reduced to just this one, and extended to
+    the caller's full z-range instead (user request, 2026-08-16: drop the
+    x=0/+25um markers and the old narrow z-window, both leftovers from
+    render_transverse's old 3-cut design, which isn't what's being
+    cross-referenced here anymore -- extend the remaining line the full
+    z-range so it reads as "the plane the cutaway view cuts along").
+    render_top now calls this with Z_VIEW_MIN/MAX, not CROSS_SECTION_Z_WINDOW.
+    """
+    _draw_dashed_x_line(view, CROSS_SECTION_X[0], y_marker, z_window_min, z_window_max)
 
 
 def _draw_cross_section_frame_lateral(view, x_marker):
@@ -967,7 +973,7 @@ def _draw_cross_section_frame_lateral(view, x_marker):
 # y = ymin - margin (nearer the camera than any real geometry, so never
 # occluded).
 # ═════════════════════════════════════════════════════════════════════════
-def render_top(foam_file, time_value, output_png, output_pvsm):
+def render_top(foam_file, time_value, output_png, output_pvsm, show_colorbar=True):
     FIELD_COLOR = 'y_coord'
     SURFACE_Y = 0.2e-3  # nominal flat-plate surface height (m) -- see
                          # topoSetDict's "y surface (0.2mm)"
@@ -1159,17 +1165,18 @@ def render_top(foam_file, time_value, output_png, output_pvsm):
     # so scaling its own RGBPoints/labels by 1000x here has no effect on
     # how ycolor itself is actually colored (that still happens through
     # the separate, untouched `ctf`, still in mm).
-    UM_PER_MM = 1000.0
-    CBAR_MARGIN_Y_MM = 0.050
-    cbar_ctf = GetColorTransferFunction(FIELD_COLOR + '_cbar_display')
-    cbar_ctf.RGBPoints = [
-        (TRANSITION_BLUE_MM - CBAR_MARGIN_Y_MM) * UM_PER_MM, 0.0, 0.0, 1.0,
-        TRANSITION_BLUE_MM * UM_PER_MM,                      0.0, 0.0, 1.0,
-        TRANSITION_RED_MM * UM_PER_MM,                       1.0, 0.0, 0.0,
-        (TRANSITION_RED_MM + CBAR_MARGIN_Y_MM) * UM_PER_MM,  1.0, 0.0, 0.0,
-    ]
-    _overlay_colorbar(cbar_ctf, 'y (μm)', output_png,
-                       custom_labels=[TRANSITION_BLUE_MM * UM_PER_MM, 0.0, TRANSITION_RED_MM * UM_PER_MM])
+    if show_colorbar:
+        UM_PER_MM = 1000.0
+        CBAR_MARGIN_Y_MM = 0.050
+        cbar_ctf = GetColorTransferFunction(FIELD_COLOR + '_cbar_display')
+        cbar_ctf.RGBPoints = [
+            (TRANSITION_BLUE_MM - CBAR_MARGIN_Y_MM) * UM_PER_MM, 0.0, 0.0, 1.0,
+            TRANSITION_BLUE_MM * UM_PER_MM,                      0.0, 0.0, 1.0,
+            TRANSITION_RED_MM * UM_PER_MM,                       1.0, 0.0, 0.0,
+            (TRANSITION_RED_MM + CBAR_MARGIN_Y_MM) * UM_PER_MM,  1.0, 0.0, 0.0,
+        ]
+        _overlay_colorbar(cbar_ctf, 'y (μm)', output_png,
+                           custom_labels=[TRANSITION_BLUE_MM * UM_PER_MM, 0.0, TRANSITION_RED_MM * UM_PER_MM])
 
     if output_pvsm:
         SaveState(output_pvsm)
@@ -1188,9 +1195,20 @@ def render_top(foam_file, time_value, output_png, output_pvsm):
 # large +x looking toward -x, so larger x is nearer) -- to sit in front of
 # the opaque gas/metal surface unoccluded, without changing their (y,z)
 # screen position at all (orthographic projection down x never depends on x).
+#
+# x_min/x_max: optional override restricting which x-slab of content is
+# shown (default None = full domain, original behavior) -- user request,
+# 2026-09-18, to narrow this down to just the x-range render_bottom's own
+# two dashed range markers bracket.
+#
+# color_by_y: color by y-depth (same offset-from-surface scheme as
+# render_top/render_bottom) instead of the default x_coord -- user
+# request, 2026-09-18, "use y for coloring like the first two views".
 # ═════════════════════════════════════════════════════════════════════════
-def render_lateral(foam_file, time_value, output_png, output_pvsm):
-    FIELD_COLOR = 'x_coord'
+def render_lateral(foam_file, time_value, output_png, output_pvsm, x_min=None, x_max=None,
+                    color_by_y=False, show_colorbar=True):
+    FIELD_COLOR = 'y_coord' if color_by_y else 'x_coord'
+    SURFACE_Y = 0.2e-3  # nominal flat-plate surface height (m), matches render_top's own
 
     reader = OpenFOAMReader(FileName=foam_file)
     reader.CellArrays = [FIELD_GM, FIELD_LS]
@@ -1205,6 +1223,13 @@ def render_lateral(foam_file, time_value, output_png, output_pvsm):
     bounds = merged.GetDataInformation().GetBounds()
     xmin, xmax, ymin, ymax, zmin, zmax = bounds
     log(f"Domain bounds: x=[{xmin},{xmax}] y=[{ymin},{ymax}] z=[{zmin},{zmax}]")
+
+    # x_min/x_max: optional override of the feature crop's x-extent (only
+    # the *content* shown -- x isn't a screen axis here, so this never
+    # touches the camera/ViewSize, same as render_cutaway's own x-crop).
+    # None (the default) preserves the original full-domain behavior.
+    x_crop_min = xmin if x_min is None else x_min
+    x_crop_max = xmax if x_max is None else x_max
 
     laser_table = _load_laser_time_vs_position(os.path.dirname(foam_file))
     z_window_min, z_window_max = Z_VIEW_MIN, Z_VIEW_MAX
@@ -1295,23 +1320,32 @@ def render_lateral(foam_file, time_value, output_png, output_pvsm):
     log(f"Liquidus outline at x=0 (clipped to view window): {ls_liquidus_slice_poly.GetNumberOfCells()} cells "
         f"(may be empty if no melt currently straddles the sample's center depth)")
 
-    # Spatial crop: y/z fixed, full x range. See render_top's own comment
-    # for why Clip over a scalar Threshold.
+    # Spatial crop: y/z fixed, x range full domain unless x_min/x_max
+    # override it. See render_top's own comment for why Clip over a
+    # scalar Threshold.
     feature = Clip(Input=gm_contour)
     feature.ClipType = 'Box'
-    feature.ClipType.Position = [xmin, Y_DEPTH_MIN, z_window_min]
-    feature.ClipType.Length = [xmax - xmin, Y_DEPTH_MAX - Y_DEPTH_MIN, z_window_max - z_window_min]
+    feature.ClipType.Position = [x_crop_min, Y_DEPTH_MIN, z_window_min]
+    feature.ClipType.Length = [x_crop_max - x_crop_min, Y_DEPTH_MAX - Y_DEPTH_MIN, z_window_max - z_window_min]
     feature.Invert = 1
     feature.UpdatePipeline(time=time_value)
     feature_poly = servermanager.Fetch(feature)
     log(f"Cropped feature: {feature_poly.GetNumberOfCells()} cells, "
         f"bounds={feature.GetDataInformation().GetBounds()}")
 
-    xcolor = Calculator(Input=feature)
-    xcolor.AttributeType = 'Point Data'
-    xcolor.ResultArrayName = FIELD_COLOR
-    xcolor.Function = 'coordsX*1e3'  # meters -> mm (was 1e6/um -- user request, 2026-08-02)
-    xcolor.UpdatePipeline(time=time_value)
+    if color_by_y:
+        surfcolor = Calculator(Input=feature)
+        surfcolor.AttributeType = 'Point Data'
+        surfcolor.ResultArrayName = FIELD_COLOR
+        surfcolor.Function = f'(coordsY-{SURFACE_Y})*1e3'  # meters -> mm, offset from
+                                                             # the nominal surface, same
+                                                             # convention as render_top
+    else:
+        surfcolor = Calculator(Input=feature)
+        surfcolor.AttributeType = 'Point Data'
+        surfcolor.ResultArrayName = FIELD_COLOR
+        surfcolor.Function = 'coordsX*1e3'  # meters -> mm (was 1e6/um -- user request, 2026-08-02)
+    surfcolor.UpdatePipeline(time=time_value)
 
     y_center = (Y_DEPTH_MIN + Y_DEPTH_MAX) / 2.0
     z_center = (z_window_min + z_window_max) / 2.0
@@ -1323,53 +1357,102 @@ def render_lateral(foam_file, time_value, output_png, output_pvsm):
     view.ViewSize = [max(1, round(VIEW_HEIGHT_PX * (z_window_max - z_window_min) / (Y_DEPTH_MAX - Y_DEPTH_MIN))), VIEW_HEIGHT_PX]
     view.ViewTime = time_value
 
-    disp = Show(xcolor, view)
+    disp = Show(surfcolor, view)
     disp.Representation = 'Surface'
     ColorBy(disp, ('POINTS', FIELD_COLOR))
     ctf = GetColorTransferFunction(FIELD_COLOR)
-    xmin_mm, xmax_mm = xmin * 1e3, xmax * 1e3
-    transition = 0.05  # width of the blue->red transition band (mm, was 50um)
-    ctf.RGBPoints = [
-        xmin_mm,     0.0, 0.0, 1.0,
-        -transition, 0.0, 0.0, 1.0,
-        transition,  1.0, 0.0, 0.0,
-        xmax_mm,     1.0, 0.0, 0.0,
-    ]
+    if color_by_y:
+        # Same transition/endpoint convention as render_top's own y_coord
+        # coloring -- kept identical so the panels read consistently.
+        ymin_off, ymax_off = (ymin - SURFACE_Y) * 1e3, (ymax - SURFACE_Y) * 1e3
+        TRANSITION_BLUE_MM = -0.100
+        TRANSITION_RED_MM = 0.100
+        ctf.RGBPoints = [
+            ymin_off,            0.0, 0.0, 1.0,
+            TRANSITION_BLUE_MM,  0.0, 0.0, 1.0,
+            TRANSITION_RED_MM,   1.0, 0.0, 0.0,
+            ymax_off,            1.0, 0.0, 0.0,
+        ]
+    else:
+        xmin_mm, xmax_mm = xmin * 1e3, xmax * 1e3
+        transition = 0.05  # width of the blue->red transition band (mm, was 50um)
+        ctf.RGBPoints = [
+            xmin_mm,     0.0, 0.0, 1.0,
+            -transition, 0.0, 0.0, 1.0,
+            transition,  1.0, 0.0, 0.0,
+            xmax_mm,     1.0, 0.0, 0.0,
+        ]
 
-    # Shared "front of camera" x position for both the mushy outline and
-    # the transverse cut markers below -- see this function's header.
-    x_marker = xmax + 0.02 * (xmax - xmin)
+    # Mushy-outline curves + cross-section frame marker are both anchored
+    # at x=0 -- skip them when x_min/x_max narrows the view to a slab that
+    # doesn't include x=0 (the default full-domain call always does), so
+    # they don't show reference geometry for a location that's off-screen
+    # in the cropped view (user request, 2026-09-18).
+    if x_min is None and x_max is None:
+        # Shared "front of camera" x position for both the mushy outline
+        # and the transverse cut markers below -- see this function's header.
+        x_marker = xmax + 0.02 * (xmax - xmin)
 
-    ls_outline = Transform(Input=ls_slice_clip)
-    ls_outline.Transform = 'Transform'
-    ls_outline.Transform.Translate = [x_marker, 0.0, 0.0]  # ls_slice sits at
-                                        # x=0 (Origin above), so this
-                                        # Translate *is* the target x
-                                        # coordinate, not an additional offset
-    ls_outline.UpdatePipeline(time=time_value)
-    ls_outline_disp = Show(ls_outline, view)
-    ls_outline_disp.Representation = 'Wireframe'
-    ls_outline_disp.ColorArrayName = ['POINTS', '']
-    ls_outline_disp.AmbientColor = LS_COLOR
-    ls_outline_disp.DiffuseColor = LS_COLOR
-    ls_outline_disp.LineWidth = LS_LINE_WIDTH
+        ls_outline = Transform(Input=ls_slice_clip)
+        ls_outline.Transform = 'Transform'
+        ls_outline.Transform.Translate = [x_marker, 0.0, 0.0]  # ls_slice sits at
+                                            # x=0 (Origin above), so this
+                                            # Translate *is* the target x
+                                            # coordinate, not an additional offset
+        ls_outline.UpdatePipeline(time=time_value)
+        ls_outline_disp = Show(ls_outline, view)
+        ls_outline_disp.Representation = 'Wireframe'
+        ls_outline_disp.ColorArrayName = ['POINTS', '']
+        ls_outline_disp.AmbientColor = LS_COLOR
+        ls_outline_disp.DiffuseColor = LS_COLOR
+        ls_outline_disp.LineWidth = LS_LINE_WIDTH
 
-    # Liquidus outline -- same x=0/x_marker translate as the solidus one
-    # above, fainter gray so the two read as distinct at a glance (liquidus
-    # nested inside solidus, since anything past liquidus is already fully
-    # solidus too).
-    ls_liquidus_outline = Transform(Input=ls_liquidus_slice_clip)
-    ls_liquidus_outline.Transform = 'Transform'
-    ls_liquidus_outline.Transform.Translate = [x_marker, 0.0, 0.0]
-    ls_liquidus_outline.UpdatePipeline(time=time_value)
-    ls_liquidus_outline_disp = Show(ls_liquidus_outline, view)
-    ls_liquidus_outline_disp.Representation = 'Wireframe'
-    ls_liquidus_outline_disp.ColorArrayName = ['POINTS', '']
-    ls_liquidus_outline_disp.AmbientColor = LS_LIQUIDUS_COLOR
-    ls_liquidus_outline_disp.DiffuseColor = LS_LIQUIDUS_COLOR
-    ls_liquidus_outline_disp.LineWidth = LS_LINE_WIDTH
+        # Liquidus outline -- same x=0/x_marker translate as the solidus one
+        # above, fainter gray so the two read as distinct at a glance (liquidus
+        # nested inside solidus, since anything past liquidus is already fully
+        # solidus too).
+        ls_liquidus_outline = Transform(Input=ls_liquidus_slice_clip)
+        ls_liquidus_outline.Transform = 'Transform'
+        ls_liquidus_outline.Transform.Translate = [x_marker, 0.0, 0.0]
+        ls_liquidus_outline.UpdatePipeline(time=time_value)
+        ls_liquidus_outline_disp = Show(ls_liquidus_outline, view)
+        ls_liquidus_outline_disp.Representation = 'Wireframe'
+        ls_liquidus_outline_disp.ColorArrayName = ['POINTS', '']
+        ls_liquidus_outline_disp.AmbientColor = LS_LIQUIDUS_COLOR
+        ls_liquidus_outline_disp.DiffuseColor = LS_LIQUIDUS_COLOR
+        ls_liquidus_outline_disp.LineWidth = LS_LINE_WIDTH
 
-    _draw_cross_section_frame_lateral(view, x_marker)
+        _draw_cross_section_frame_lateral(view, x_marker)
+    else:
+        # Dashed top/bottom bracket lines -- user request, 2026-09-22, to
+        # visually tie this (x-cropped) panel back to the highlighted
+        # x-range bracketed by render_bottom's own two dashed range
+        # markers: those are horizontal lines spanning z at fixed x
+        # (screen-vertical there); these are the same idea rotated to this
+        # view's own screen axes -- horizontal lines spanning z at fixed y
+        # (screen-vertical here), placed near the visible frame's top/
+        # bottom edges. Inset from the true Y_DEPTH_MIN/MAX crop bounds
+        # (not exactly on them): the top one has to clear the *separate*
+        # top-10% pixel crop applied to output_png further down, and both
+        # get a little margin so they read as bracketing lines against the
+        # frame edge rather than touching it.
+        x_marker = xmax + 0.02 * (xmax - xmin)  # nearest camera, same as above
+        y_span = Y_DEPTH_MAX - Y_DEPTH_MIN
+        # Margins account for FRAME_MARGIN's 2% zoom-out (the visible
+        # window is slightly wider than [Y_DEPTH_MIN,Y_DEPTH_MAX]) and the
+        # separate top-10%-of-pixels crop applied to output_png further
+        # down -- sized so both lines land clearly inside the remaining
+        # frame instead of right at its edges (first attempt landed almost
+        # exactly on the crop boundary/panel seam, user report, 2026-09-22).
+        # 0.25 (first attempt) landed at almost the same on-screen height as
+        # the "Lateral view" text the stacking script draws afterward,
+        # overlapping it (user report, 2026-09-22) -- moved closer to the
+        # top-10%-crop boundary (~0.09) so it clears the text from above
+        # instead, with a small buffer against that crop's own rounding.
+        top_line_y = Y_DEPTH_MIN + 0.13 * y_span
+        bottom_line_y = Y_DEPTH_MAX - 0.15 * y_span
+        _draw_dashed_x_line(view, x_marker, top_line_y, z_window_min, z_window_max)
+        _draw_dashed_x_line(view, x_marker, bottom_line_y, z_window_min, z_window_max)
 
     # Camera: looking down +x, up = -y so atmosphere is "up" in the frame.
     view.CameraParallelProjection = 1
@@ -1392,7 +1475,218 @@ def render_lateral(foam_file, time_value, output_png, output_pvsm):
     # constant too (previously it wasn't, since it ran on the
     # already-content-cropped, variable-height image).
     _clip_top_fraction(output_png, 0.10)
-    _overlay_colorbar(ctf, 'x (mm)', output_png, custom_labels=[-0.1, 0.0, 0.1])
+    if show_colorbar:
+        if color_by_y:
+            # Same cosmetic-only cbar_ctf technique as render_top's own colorbar
+            # (see its comment for why), kept identical so the two read the same.
+            UM_PER_MM = 1000.0
+            CBAR_MARGIN_Y_MM = 0.050
+            cbar_ctf = GetColorTransferFunction(FIELD_COLOR + '_cbar_display')
+            cbar_ctf.RGBPoints = [
+                (TRANSITION_BLUE_MM - CBAR_MARGIN_Y_MM) * UM_PER_MM, 0.0, 0.0, 1.0,
+                TRANSITION_BLUE_MM * UM_PER_MM,                      0.0, 0.0, 1.0,
+                TRANSITION_RED_MM * UM_PER_MM,                       1.0, 0.0, 0.0,
+                (TRANSITION_RED_MM + CBAR_MARGIN_Y_MM) * UM_PER_MM,  1.0, 0.0, 0.0,
+            ]
+            _overlay_colorbar(cbar_ctf, 'y (μm)', output_png,
+                               custom_labels=[TRANSITION_BLUE_MM * UM_PER_MM, 0.0, TRANSITION_RED_MM * UM_PER_MM])
+        else:
+            _overlay_colorbar(ctf, 'x (mm)', output_png, custom_labels=[-0.1, 0.0, 0.1])
+
+    if output_pvsm:
+        SaveState(output_pvsm)
+        log(f"Saved state: {output_pvsm}")
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# --view=bottom -- companion to --view=top, looking *up* the y-axis instead
+# of down it (camera positioned deep in the material, below the melt pool/
+# vapor-depression region, looking back toward the original flat surface)
+# so that whichever isosurface patch sits *nearest* this below-camera --
+# e.g. the underside of an overhanging keyhole lip, or the true bottom of
+# the depression -- is the one drawn, instead of always the topmost
+# (nearest the gas-side camera) patch top view shows. No separate "keep
+# only gas" clip/threshold is needed for this: gm_contour already extracts
+# the *entire* gas/metal boundary (including any overhang's underside),
+# and a plain opaque Surface render always resolves overlapping patches by
+# nearest-to-camera (z-buffer) -- reversing which end of the y-axis the
+# camera sits at is enough by itself to swap which patch wins that contest
+# (user request, 2026-09-18: reveal keyhole-overhang undersides top view
+# hides behind their own lip).
+#
+# Colored by y-depth, same convention as render_top (offset from the
+# nominal surface, blue=raised/red=recessed) -- user request, 2026-09-18,
+# reversing an earlier x-coloring choice made only for consistency with
+# the lateral/cutaway panels.
+#
+# x_half=True: crop the window to the true centerline (x<0) instead of the
+# full X_LATERAL_MIN..MAX width -- user request, 2026-09-18, an exact x=0
+# cut, deliberately not render_cutaway's own offset -25um plane (that
+# plane is specific to render_cutaway/render_transverse's cross-referenced
+# cut, not relevant here).
+# ═════════════════════════════════════════════════════════════════════════
+def render_bottom(foam_file, time_value, output_png, output_pvsm, x_half=False, show_colorbar=True):
+    FIELD_COLOR = 'y_coord'
+    SURFACE_Y = 0.2e-3  # nominal flat-plate surface height (m), matches render_top's own
+
+    reader = OpenFOAMReader(FileName=foam_file)
+    reader.CellArrays = [FIELD_GM]
+    reader.Createcelltopointfiltereddata = 1
+    reader.UpdatePipeline(time=time_value)
+    log("reader loaded")
+
+    merged = MergeBlocks(Input=reader)
+    merged.UpdatePipeline(time=time_value)
+    log("blocks merged")
+
+    bounds = merged.GetDataInformation().GetBounds()
+    xmin, xmax, ymin, ymax, zmin, zmax = bounds
+    log(f"Domain bounds: x=[{xmin},{xmax}] y=[{ymin},{ymax}] z=[{zmin},{zmax}]")
+
+    laser_table = _load_laser_time_vs_position(os.path.dirname(foam_file))
+    z_window_min, z_window_max = Z_VIEW_MIN, Z_VIEW_MAX
+    x_window_min = X_LATERAL_MIN
+    x_window_max = 0.0 if x_half else X_LATERAL_MAX
+    log(f"Scan z range=[{laser_table[0][3]*1e3:.3f},{laser_table[-1][3]*1e3:.3f}]mm; "
+        f"fixed crop window: x=[{x_window_min*1e3:.3f},{x_window_max*1e3:.3f}]mm "
+        f"z=[{z_window_min*1e3:.3f},{z_window_max*1e3:.3f}]mm (y uncropped)")
+
+    laser_z = _laser_z_at(laser_table, time_value)
+    log(f"Laser z={laser_z*1e3:.3f}mm at t={time_value}")
+
+    gm_contour = Contour(Input=merged)
+    gm_contour.ContourBy = ['POINTS', FIELD_GM]
+    gm_contour.Isosurfaces = [ISO_THRESHOLD]
+    gm_contour.UpdatePipeline(time=time_value)
+    gm_poly = servermanager.Fetch(gm_contour)
+    log(f"Gas/metal surface: {gm_poly.GetNumberOfCells()} cells")
+
+    # Spatial crop: x/z fixed, full y -- same technique as render_top's own
+    # feature clip (see its comment for why Clip over a scalar Threshold).
+    feature = Clip(Input=gm_contour)
+    feature.ClipType = 'Box'
+    feature.ClipType.Position = [x_window_min, ymin, z_window_min]
+    feature.ClipType.Length = [x_window_max - x_window_min, ymax - ymin, z_window_max - z_window_min]
+    feature.Invert = 1
+    feature.UpdatePipeline(time=time_value)
+    feature_poly = servermanager.Fetch(feature)
+    log(f"Cropped feature: {feature_poly.GetNumberOfCells()} cells, "
+        f"bounds={feature.GetDataInformation().GetBounds()}")
+
+    ycolor = Calculator(Input=feature)
+    ycolor.AttributeType = 'Point Data'
+    ycolor.ResultArrayName = FIELD_COLOR
+    ycolor.Function = f'(coordsY-{SURFACE_Y})*1e3'  # meters -> mm, offset from the
+                                                      # nominal surface, same convention
+                                                      # as render_top
+    ycolor.UpdatePipeline(time=time_value)
+
+    x_center = (x_window_min + x_window_max) / 2.0
+    y_center = (ymin + ymax) / 2.0
+    z_center = (z_window_min + z_window_max) / 2.0
+
+    # Unlike render_cutaway's own x-crop (there, x is the camera's *depth*
+    # axis, invisible on screen, so narrowing it never touches the output
+    # canvas at all), x here IS a screen axis (this camera looks down y) --
+    # so x_half's narrower x_window has to shrink the canvas *height* to
+    # match, not just leave the same canvas mostly blank. px_per_m_x is
+    # pinned to the *full* X_LATERAL range so x_half renders at the same
+    # physical mm-to-pixel scale as the full view (same zoom level,
+    # comparable side by side) rather than re-zooming to fill the frame --
+    # width then only depends on the (unchanged) z-window, and height
+    # shrinks in proportion to however much x-range is actually shown
+    # (500px full, 250px for x_half's exact half-range).
+    px_per_m_x = VIEW_HEIGHT_PX / (X_LATERAL_MAX - X_LATERAL_MIN)
+    view_width = max(1, round(px_per_m_x * (z_window_max - z_window_min)))
+    view_height = max(1, round(px_per_m_x * (x_window_max - x_window_min)))
+
+    view = GetActiveViewOrCreate('RenderView')
+    view.OrientationAxesVisibility = 0
+    view.Background = [1, 1, 1]
+    view.ViewSize = [view_width, view_height]
+    view.ViewTime = time_value
+
+    disp = Show(ycolor, view)
+    disp.Representation = 'Surface'
+    ColorBy(disp, ('POINTS', FIELD_COLOR))
+    ctf = GetColorTransferFunction(FIELD_COLOR)
+    # Same transition/endpoint convention as render_top's own y_coord
+    # coloring -- kept identical so the two panels read consistently.
+    ymin_off, ymax_off = (ymin - SURFACE_Y) * 1e3, (ymax - SURFACE_Y) * 1e3
+    TRANSITION_BLUE_MM = -0.100
+    TRANSITION_RED_MM = 0.100
+    ctf.RGBPoints = [
+        ymin_off,            0.0, 0.0, 1.0,
+        TRANSITION_BLUE_MM,  0.0, 0.0, 1.0,
+        TRANSITION_RED_MM,   1.0, 0.0, 0.0,
+        ymax_off,            1.0, 0.0, 0.0,
+    ]
+
+    y_marker = ymax + 0.02 * (ymax - ymin)  # nearer this below-camera than
+                                             # any real geometry, same idea
+                                             # as render_top's own y_marker
+                                             # (just on the opposite side)
+
+    # Range markers: two dashed lines at x=0um/70um, marking the x-range
+    # meant to be visible in the (optionally x-cropped) lateral view in
+    # the same 4-panel collage -- user request, 2026-09-18 (was 50/150,
+    # then 70/130).
+    RANGE_MARKER_X_UM = [0, 70]
+    for _x_um in RANGE_MARKER_X_UM:
+        _draw_dashed_x_line(view, _x_um * 1e-6, y_marker, z_window_min, z_window_max)
+
+    # Laser center-position marker -- same technique as render_top's own
+    # (hollow orange circle at the true 35um spot radius, see CLAUDE.md).
+    LASER_SPOT_RADIUS_M = 35e-6
+    _n = 48
+    _angles = np.linspace(0.0, 2.0 * np.pi, _n, endpoint=False)
+    _circle_pts = []
+    for _a in _angles:
+        _circle_pts.extend([
+            LASER_SPOT_RADIUS_M * np.cos(_a), y_marker,
+            laser_z + LASER_SPOT_RADIUS_M * np.sin(_a),
+        ])
+    laser_circle = PolyLineSource(Points=_circle_pts, Closed=1)
+    laser_circle_disp = Show(laser_circle, view)
+    laser_circle_disp.Representation = 'Wireframe'
+    laser_circle_disp.ColorArrayName = ['POINTS', '']
+    laser_circle_disp.AmbientColor = [1.0, 0.549, 0.0]
+    laser_circle_disp.DiffuseColor = [1.0, 0.549, 0.0]
+    laser_circle_disp.LineWidth = 4.0
+
+    # Camera: looking *up* the y-axis (focal point at -y relative to camera
+    # position -- opposite of render_top, which looks down +y). CameraViewUp
+    # is [1,0,0] here, not render_top's [-1,0,0] -- the sign has to flip
+    # along with the reversed view direction to keep the same on-screen
+    # convention (z reading left-to-right) as every other panel: with
+    # viewDir=(0,-1,0), screen-right = viewDir x up = (0,-1,0)x(1,0,0) =
+    # (0,0,1) = +z, matching render_top's own +z screen-right.
+    view.CameraParallelProjection = 1
+    view.CameraViewUp = [1, 0, 0]
+    view.CameraFocalPoint = [x_center, y_center, z_center]
+    view.CameraPosition = [x_center, y_center + 2.0 * (ymax - ymin), z_center]
+    view.CameraParallelScale = (x_window_max - x_window_min) / 2.0 * FRAME_MARGIN
+    Render(view)
+
+    SaveScreenshot(output_png, view, ImageResolution=view.ViewSize)
+    log(f"Saved: {output_png}")
+
+    if show_colorbar:
+        # Colorbar's visual range tracks the transition bounds, not the full
+        # domain-derived ymin_off/ymax_off, and is labeled in um -- same
+        # cosmetic-only cbar_ctf technique as render_top's own (see its
+        # comment for why), kept identical so the two colorbars read the same.
+        UM_PER_MM = 1000.0
+        CBAR_MARGIN_Y_MM = 0.050
+        cbar_ctf = GetColorTransferFunction(FIELD_COLOR + '_cbar_display')
+        cbar_ctf.RGBPoints = [
+            (TRANSITION_BLUE_MM - CBAR_MARGIN_Y_MM) * UM_PER_MM, 0.0, 0.0, 1.0,
+            TRANSITION_BLUE_MM * UM_PER_MM,                      0.0, 0.0, 1.0,
+            TRANSITION_RED_MM * UM_PER_MM,                       1.0, 0.0, 0.0,
+            (TRANSITION_RED_MM + CBAR_MARGIN_Y_MM) * UM_PER_MM,  1.0, 0.0, 0.0,
+        ]
+        _overlay_colorbar(cbar_ctf, 'y (μm)', output_png,
+                           custom_labels=[TRANSITION_BLUE_MM * UM_PER_MM, 0.0, TRANSITION_RED_MM * UM_PER_MM])
 
     if output_pvsm:
         SaveState(output_pvsm)
@@ -2085,8 +2379,28 @@ def render_transverse(foam_file, time_value, output_png, output_pvsm):
 # ═════════════════════════════════════════════════════════════════════════
 def render_cutaway(foam_file, time_value, output_png, output_pvsm, y_min=None, y_max=None, x_plane=None,
                     grid=False, top_crop_frac=0.10, show_velocity=False, supersample=1, dotted_solidus=False,
-                    highlights=None, show_rays=False, show_section_velocity=False):
-    FIELD_COLOR = 'x_coord'
+                    highlights=None, show_rays=False, show_section_velocity=False, color_by_y=False,
+                    z_widen_frac=0.0):
+    # color_by_y: color the main gas/metal surface by y-depth (same
+    # offset-from-surface scheme as render_top/render_bottom) instead of
+    # the default x_coord -- user request, 2026-09-22, so every panel in
+    # the 4-panel gas collage uses one consistent coloring and can share
+    # one colorbar. Only touches the main surface's `ctf`/colorbar -- the
+    # solid/mushy/liquid fill colors and outline curves below are already
+    # flat/constant colors, not derived from FIELD_COLOR, so they're
+    # unaffected either way.
+    #
+    # z_widen_frac: extend the fixed Z_VIEW_MIN/MAX window backward (toward
+    # lower z, i.e. further behind the laser, not ahead of it) by this
+    # fraction of the window's normal width -- user request, 2026-09-24:
+    # T0=400K/500K cases (Zixun) grow a longer trailing melt pool than the
+    # window was sized for, so the pool's tail runs off the left edge of
+    # frame. Only the trailing (min) edge moves; the leading (laser/max)
+    # edge stays put since there's never anything ahead of the beam worth
+    # showing. Cutaway-only -- top/lateral/xray keep the untouched shared
+    # Z_VIEW_MIN/MAX (this only reads them as a base, never mutates them).
+    FIELD_COLOR = 'y_coord' if color_by_y else 'x_coord'
+    SURFACE_Y = 0.2e-3  # nominal flat-plate surface height (m), matches render_top's own
     # x_plane: optional override of the cut plane itself (default matches
     # render_transverse's existing "blue" cross-section, X_CROSS_SECTIONS[0]
     # = -25um) -- same override pattern as y_min/y_max below, added for the
@@ -2140,6 +2454,25 @@ def render_cutaway(foam_file, time_value, output_png, output_pvsm, y_min=None, y
 
     laser_table = _load_laser_time_vs_position(os.path.dirname(foam_file))
     z_window_min, z_window_max = Z_VIEW_MIN, Z_VIEW_MAX
+    if z_widen_frac:
+        requested_z_window_min = z_window_min - z_widen_frac * (Z_VIEW_MAX - Z_VIEW_MIN)
+        # Clamp to the real domain edge (zmin, just computed above from the
+        # actual mesh bounds) -- user report, 2026-09-24: an unclamped
+        # widen_frac can push the window past where real data actually
+        # ends (nothing there to render but the bottom-10% corner-artifact
+        # gray fill below paints that empty strip gray unconditionally
+        # regardless of content, so it silently fabricated extra "substrate"
+        # past the true domain edge instead of leaving it blank/absent).
+        # Only ever matters for large widen_frac values on cases whose
+        # trailing melt pool sits close to z=0 already.
+        z_window_min = max(requested_z_window_min, zmin)
+        if z_window_min > requested_z_window_min:
+            log(f"z_widen_frac={z_widen_frac} requested z_window_min="
+                f"{requested_z_window_min * 1e3:.3f}mm, past the real domain "
+                f"edge zmin={zmin * 1e3:.3f}mm -- clamped to {z_window_min * 1e3:.3f}mm")
+        else:
+            log(f"z_widen_frac={z_widen_frac} -> trailing edge extended to "
+                f"z_window_min={z_window_min * 1e3:.3f}mm (z_window_max unchanged)")
     log(f"Fixed crop window: x<{CUTAWAY_X_PLANE * 1e3:.3f}mm "
         f"y=[{y_min * 1e3:.3f},{y_max * 1e3:.3f}]mm "
         f"z=[{z_window_min * 1e3:.3f},{z_window_max * 1e3:.3f}]mm")
@@ -2287,11 +2620,16 @@ def render_cutaway(foam_file, time_value, output_png, output_pvsm, y_min=None, y
     log(f"Cropped feature: {feature_poly.GetNumberOfCells()} cells, "
         f"bounds={feature.GetDataInformation().GetBounds()}")
 
-    xcolor = Calculator(Input=feature)
-    xcolor.AttributeType = 'Point Data'
-    xcolor.ResultArrayName = FIELD_COLOR
-    xcolor.Function = 'coordsX*1e3'  # meters -> mm
-    xcolor.UpdatePipeline(time=time_value)
+    surfcolor = Calculator(Input=feature)
+    surfcolor.AttributeType = 'Point Data'
+    surfcolor.ResultArrayName = FIELD_COLOR
+    if color_by_y:
+        surfcolor.Function = f'(coordsY-{SURFACE_Y})*1e3'  # meters -> mm, offset from
+                                                             # the nominal surface, same
+                                                             # convention as render_top
+    else:
+        surfcolor.Function = 'coordsX*1e3'  # meters -> mm
+    surfcolor.UpdatePipeline(time=time_value)
 
     y_center = (y_min + y_max) / 2.0
     z_center = (z_window_min + z_window_max) / 2.0
@@ -2314,40 +2652,54 @@ def render_cutaway(foam_file, time_value, output_png, output_pvsm, y_min=None, y
     # boxes) -- see _tube_outline_multi below.
     highlights = highlights or []
 
-    disp = Show(xcolor, view)
+    disp = Show(surfcolor, view)
     disp.Representation = 'Surface'
     ColorBy(disp, ('POINTS', FIELD_COLOR))
     ctf = GetColorTransferFunction(FIELD_COLOR)
-    # Back to x (not render_top's y -- tried that, user request 2026-08-17:
-    # reverted) -- y duplicated exactly what the top panel already shows
-    # (height), adding no new information; x is the one dimension an
-    # orthographic side view otherwise flattens away entirely, so it's the
-    # more informative choice specifically for this panel.
-    #
-    # Explicit transition bounds -- -135um to -35um (was -125/-25, user
-    # request, 2026-08-22, to match this collage's actual --x-plane-um=-35
-    # cut -- see below). Originally -125/-25 (user request, 2026-08-17 --
-    # prior attempts: +-0.12mm fit-to-visible-range, -0.1/+0.05mm,
-    # -0.1/0.0mm) so TRANSITION_RED_MM landed exactly on the *default*
-    # CUTAWAY_X_PLANE (-25um); the collage script overrides that default to
-    # -35um though, so -25um was actually past the real cut plane and the
-    # visible edge never quite reached full red. -35um now lands exactly on
-    # it again, so the cut plane itself -- the reddest point actually
-    # reached -- is fully saturated red, using the whole blue->red range
-    # across the visible surface instead of stopping short of it. x_min_mm
-    # (the true domain edge) stays the fully-saturated flat blue endpoint;
-    # the outer red endpoint is a dummy value just past TRANSITION_RED_MM,
-    # purely so RGBPoints' values stay strictly increasing -- real data
-    # never goes past it.
-    x_min_mm = xmin * 1e3
-    TRANSITION_BLUE_MM = -0.135
-    TRANSITION_RED_MM = -0.035
-    ctf.RGBPoints = [
-        x_min_mm,                 0.0, 0.0, 1.0,
-        TRANSITION_BLUE_MM,       0.0, 0.0, 1.0,
-        TRANSITION_RED_MM,        1.0, 0.0, 0.0,
-        TRANSITION_RED_MM + 0.01, 1.0, 0.0, 0.0,
-    ]
+    if color_by_y:
+        # Same transition/endpoint convention as render_top's own y_coord
+        # coloring -- user request, 2026-09-22, so this panel's coloring
+        # (and colorbar) matches the other 3 in the gas4panel collage.
+        ymin_off, ymax_off = (ymin - SURFACE_Y) * 1e3, (ymax - SURFACE_Y) * 1e3
+        TRANSITION_BLUE_MM = -0.100
+        TRANSITION_RED_MM = 0.100
+        ctf.RGBPoints = [
+            ymin_off,            0.0, 0.0, 1.0,
+            TRANSITION_BLUE_MM,  0.0, 0.0, 1.0,
+            TRANSITION_RED_MM,   1.0, 0.0, 0.0,
+            ymax_off,            1.0, 0.0, 0.0,
+        ]
+    else:
+        # Back to x (not render_top's y -- tried that, user request 2026-08-17:
+        # reverted) -- y duplicated exactly what the top panel already shows
+        # (height), adding no new information; x is the one dimension an
+        # orthographic side view otherwise flattens away entirely, so it's the
+        # more informative choice specifically for this panel.
+        #
+        # Explicit transition bounds -- -135um to -35um (was -125/-25, user
+        # request, 2026-08-22, to match this collage's actual --x-plane-um=-35
+        # cut -- see below). Originally -125/-25 (user request, 2026-08-17 --
+        # prior attempts: +-0.12mm fit-to-visible-range, -0.1/+0.05mm,
+        # -0.1/0.0mm) so TRANSITION_RED_MM landed exactly on the *default*
+        # CUTAWAY_X_PLANE (-25um); the collage script overrides that default to
+        # -35um though, so -25um was actually past the real cut plane and the
+        # visible edge never quite reached full red. -35um now lands exactly on
+        # it again, so the cut plane itself -- the reddest point actually
+        # reached -- is fully saturated red, using the whole blue->red range
+        # across the visible surface instead of stopping short of it. x_min_mm
+        # (the true domain edge) stays the fully-saturated flat blue endpoint;
+        # the outer red endpoint is a dummy value just past TRANSITION_RED_MM,
+        # purely so RGBPoints' values stay strictly increasing -- real data
+        # never goes past it.
+        x_min_mm = xmin * 1e3
+        TRANSITION_BLUE_MM = -0.135
+        TRANSITION_RED_MM = -0.035
+        ctf.RGBPoints = [
+            x_min_mm,                 0.0, 0.0, 1.0,
+            TRANSITION_BLUE_MM,       0.0, 0.0, 1.0,
+            TRANSITION_RED_MM,        1.0, 0.0, 0.0,
+            TRANSITION_RED_MM + 0.01, 1.0, 0.0, 0.0,
+        ]
 
 
     # ── Prototype: tangential-velocity arrows on the liquid surface ──────
@@ -2819,33 +3171,6 @@ def render_cutaway(foam_file, time_value, output_png, output_pvsm, y_min=None, y
     SaveScreenshot(output_png, view, ImageResolution=render_res)
     log(f"Saved: {output_png} at {render_res} ({supersample}x)")
 
-    # Flatly overwrite the bottom 10% of the *raw* render with solid gray
-    # to mask a rendering artifact in the bottom-right corner (user report,
-    # 2026-08-22) -- done first, before any other post-processing (top
-    # crop/grid/rays/colorbar) touches the image, since those only add
-    # overlays or trim the *top* and would otherwise leave the corner
-    # artifact untouched underneath.
-    #
-    # Fill color is *sampled* from the image itself (just above the fill
-    # line, near the left edge -- the artifact is bottom-*right* only, so
-    # this stays clean) rather than using the literal SOLID_FILL_COLOR
-    # constant: VTK's default Phong shading renders that Ambient/
-    # DiffuseColor triple visibly lighter on-screen than its raw RGB
-    # values, so a hardcoded fill left a mismatched band (caught by eye
-    # once rendered, 2026-08-22) -- sampling guarantees a pixel-exact match
-    # regardless of how the renderer actually shades that flat fill.
-    img = mpimg.imread(output_png)
-    h_raw, w_raw = img.shape[:2]
-    fill_start_row = round(h_raw * 0.90)
-    sample_row = max(0, fill_start_row - 5)
-    sample_col = round(w_raw * 0.05)
-    fill_color = img[sample_row, sample_col, :3].copy()
-    img[fill_start_row:, :, :3] = fill_color
-    if img.shape[2] == 4:
-        img[fill_start_row:, :, 3] = 1.0
-    mpimg.imsave(output_png, img)
-    log(f"Filled bottom 10% ({h_raw - fill_start_row}px) with sampled gray {fill_color} to mask corner artifact")
-
     CROP_FRAC = top_crop_frac
     if CROP_FRAC:
         _clip_top_fraction(output_png, CROP_FRAC)
@@ -2916,14 +3241,16 @@ def render_cutaway(foam_file, time_value, output_png, output_pvsm, y_min=None, y
     # here for the same reason (cbar_ctf is never bound to any real
     # Show()/ColorBy).
     UM_PER_MM = 1000.0
+    CBAR_MARGIN_Y_MM = 0.050  # matches render_top's own local constant
+    cbar_margin_mm = CBAR_MARGIN_Y_MM if color_by_y else CBAR_MARGIN_MM
     cbar_ctf = GetColorTransferFunction(FIELD_COLOR + '_cbar_display')
     cbar_ctf.RGBPoints = [
-        (TRANSITION_BLUE_MM - CBAR_MARGIN_MM) * UM_PER_MM, 0.0, 0.0, 1.0,
+        (TRANSITION_BLUE_MM - cbar_margin_mm) * UM_PER_MM, 0.0, 0.0, 1.0,
         TRANSITION_BLUE_MM * UM_PER_MM,                    0.0, 0.0, 1.0,
         TRANSITION_RED_MM * UM_PER_MM,                     1.0, 0.0, 0.0,
-        (TRANSITION_RED_MM + CBAR_MARGIN_MM) * UM_PER_MM,  1.0, 0.0, 0.0,
+        (TRANSITION_RED_MM + cbar_margin_mm) * UM_PER_MM,  1.0, 0.0, 0.0,
     ]
-    _overlay_colorbar(cbar_ctf, 'x (μm)', output_png,
+    _overlay_colorbar(cbar_ctf, 'y (μm)' if color_by_y else 'x (μm)', output_png,
                        custom_labels=[TRANSITION_BLUE_MM * UM_PER_MM, TRANSITION_RED_MM * UM_PER_MM],
                        labels_above=False, skip_overlay=True, thickness_scale=1.5)
 
@@ -3455,7 +3782,8 @@ def render_xray(foam_file, time_value, output_png):
 def main():
     parser = argparse.ArgumentParser(
         description="Render one of five VDEP power-sweep post-processing views.")
-    parser.add_argument('--view', required=True, choices=['top', 'lateral', 'xray', 'transverse', 'cutaway'])
+    parser.add_argument('--view', required=True,
+                         choices=['top', 'lateral', 'xray', 'transverse', 'cutaway', 'bottom'])
     parser.add_argument('case_foam')
     parser.add_argument('time', type=float)
     parser.add_argument('output_png')
@@ -3512,12 +3840,38 @@ def main():
                               "combined mushy+liquid region of the flat cut-face slice, same size/"
                               "density/style as --velocity's surface arrows -- for collage_v4, "
                               "2026-08-22.")
+    parser.add_argument('--z-widen-frac', type=float, default=0.0,
+                         help="cutaway view only: extend the fixed z-window backward (toward lower "
+                              "z, behind the laser -- the leading/laser edge never moves) by this "
+                              "fraction of the window's normal width. E.g. 0.3 = 30%% more room for "
+                              "a longer trailing melt pool (T0=400K/500K cases). Default 0 (no change).")
+    parser.add_argument('--half', action='store_true',
+                         help="bottom view only: crop to the true centerline (x<0) instead of the "
+                              "full X_LATERAL_MIN..MAX width.")
+    parser.add_argument('--x-min-um', type=float, default=None,
+                         help="lateral view only: override the x-crop lower bound (um). "
+                              "Defaults to the full domain if omitted.")
+    parser.add_argument('--x-max-um', type=float, default=None,
+                         help="lateral view only: override the x-crop upper bound (um). "
+                              "Defaults to the full domain if omitted.")
+    parser.add_argument('--color-y', action='store_true',
+                         help="lateral/cutaway views only: color by y-depth (same scheme "
+                              "as top/bottom) instead of the default x_coord.")
+    parser.add_argument('--no-colorbar', action='store_true',
+                         help="top/bottom/lateral views only: skip this panel's own "
+                              "colorbar overlay -- for a collage where only one panel "
+                              "(typically cutaway) carries a shared colorbar.")
     args = parser.parse_args()
 
     if args.view == 'top':
-        render_top(args.case_foam, args.time, args.output_png, args.output_pvsm)
+        render_top(args.case_foam, args.time, args.output_png, args.output_pvsm,
+                    show_colorbar=not args.no_colorbar)
     elif args.view == 'lateral':
-        render_lateral(args.case_foam, args.time, args.output_png, args.output_pvsm)
+        x_min = args.x_min_um * 1e-6 if args.x_min_um is not None else None
+        x_max = args.x_max_um * 1e-6 if args.x_max_um is not None else None
+        render_lateral(args.case_foam, args.time, args.output_png, args.output_pvsm,
+                        x_min=x_min, x_max=x_max, color_by_y=args.color_y,
+                        show_colorbar=not args.no_colorbar)
     elif args.view == 'transverse':
         render_transverse(args.case_foam, args.time, args.output_png, args.output_pvsm)
     elif args.view == 'cutaway':
@@ -3560,11 +3914,15 @@ def main():
                         top_crop_frac=args.top_crop_frac, show_velocity=args.velocity,
                         supersample=args.supersample, dotted_solidus=args.dotted_solidus,
                         highlights=highlights, show_rays=args.rays,
-                        show_section_velocity=args.section_velocity)
+                        show_section_velocity=args.section_velocity, color_by_y=args.color_y,
+                        z_widen_frac=args.z_widen_frac)
     elif args.view == 'xray':
         if args.output_pvsm:
             log("Note: --view=xray never had a ParaView state to save; ignoring output_pvsm arg.")
         render_xray(args.case_foam, args.time, args.output_png)
+    elif args.view == 'bottom':
+        render_bottom(args.case_foam, args.time, args.output_png, args.output_pvsm,
+                       x_half=args.half, show_colorbar=not args.no_colorbar)
 
 
 if __name__ == '__main__':

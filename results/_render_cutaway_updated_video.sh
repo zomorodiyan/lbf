@@ -27,20 +27,34 @@
 #
 # Resumable: skips any timestep whose frame PNG already exists.
 #
+# Optional 2nd arg <z_widen_frac> (default 0): extends the cutaway view's
+# trailing (behind-the-laser) edge by this fraction of the normal z-window
+# width -- for cases whose melt pool runs longer than the default frame,
+# e.g. the T0=400K/500K lineages (user request, 2026-09-24; see
+# render_view.py's own --z-widen-frac help for the full explanation).
+# Only extends the trailing edge -- the leading/laser edge never moves.
+# Output filenames get a "_z<frac>" tag when non-zero, so widened and
+# default-width frames never collide; default (0) output is byte-identical
+# in naming to before this option existed.
+#
 # Output (written to results/, prefix = the case directory's basename):
-#   results/<prefix>_cutaway_updated_t<time>.png   (one per timestep)
-#   results/<prefix>_cutaway_updated_video.mp4
+#   results/<prefix>_cutaway_updated_t<time>.png                  (z_widen_frac=0, one per timestep)
+#   results/<prefix>_cutaway_updated_z<frac>_t<time>.png           (z_widen_frac!=0)
+#   results/<prefix>_cutaway_updated_video.mp4                     (or _z<frac>_video.mp4)
 set -euo pipefail
 cd ~/lbf3
 
 if [ $# -lt 1 ]; then
-  echo "Usage: bash results/_render_cutaway_updated_video.sh <case>"
+  echo "Usage: bash results/_render_cutaway_updated_video.sh <case> [z_widen_frac]"
   echo "  <case> is a bare number (75), a bare VDEP case dir name (testrun75_vdep_3_Al),"
   echo "  or a path to any other reconstructed case."
+  echo "  [z_widen_frac] optional, default 0: e.g. 0.3 for 30% more trailing-edge room"
+  echo "  (T0=400K/500K cases with longer melt pools)."
   exit 1
 fi
 
 ARG="$1"
+Z_WIDEN_FRAC="${2:-0}"
 if [[ "$ARG" =~ ^[0-9]+$ ]]; then
   CASE="tutorials/laserbeamFoam/vdep/testrun${ARG}_vdep_3_Al"
 elif [[ "$ARG" == */* ]]; then
@@ -49,6 +63,11 @@ else
   CASE="tutorials/laserbeamFoam/vdep/${ARG}"
 fi
 PREFIX="$(basename "$CASE")"
+if [ "$Z_WIDEN_FRAC" != "0" ]; then
+  TAG="_z${Z_WIDEN_FRAC}"
+else
+  TAG=""
+fi
 
 if [ ! -d "$CASE" ]; then
   echo "ERROR: case directory not found: $CASE"
@@ -75,7 +94,7 @@ IMG=kitware/paraview:pv-v5.8.0-osmesa-py3
 i=0
 for t in "${TIMES[@]}"; do
   i=$((i+1))
-  out_png="results/${PREFIX}_cutaway_updated_t${t}.png"
+  out_png="results/${PREFIX}_cutaway_updated${TAG}_t${t}.png"
   if [ -f "$out_png" ]; then
     echo "[$i/${#TIMES[@]}] t=$t (already done)"
     continue
@@ -84,18 +103,19 @@ for t in "${TIMES[@]}"; do
   docker run --rm --user "$(id -u):$(id -g)" -e PYTHONUNBUFFERED=1 -v "$(pwd)":/workspace --entrypoint /opt/paraview/bin/pvpython "$IMG" \
     /workspace/results/render_view.py --view=cutaway \
     --y-min-um=-300 --y-max-um=300 --x-plane-um=-35 --top-crop-frac=0 --supersample=3 --velocity --rays --section-velocity \
+    --z-widen-frac="$Z_WIDEN_FRAC" \
     "/workspace/$FOAM_FILE" "$t" "/workspace/$out_png" \
-    > /tmp/cutawayupd_${PREFIX}_${t}.log 2>&1 || { echo "  FAILED (see /tmp/cutawayupd_${PREFIX}_${t}.log)"; continue; }
+    > /tmp/cutawayupd_${PREFIX}${TAG}_${t}.log 2>&1 || { echo "  FAILED (see /tmp/cutawayupd_${PREFIX}${TAG}_${t}.log)"; continue; }
 done
 
 echo "ALL FRAMES DONE"
 
 # Build the mp4 in true chronological order via an ffmpeg concat list --
 # same scientific/decimal-notation sort gotcha as _render_stacked_video.sh.
-CONCAT_LIST="results/_${PREFIX}_cutaway_updated_concat.txt"
+CONCAT_LIST="results/_${PREFIX}_cutaway_updated${TAG}_concat.txt"
 > "$CONCAT_LIST"
 for t in "${TIMES[@]}"; do
-  f="results/${PREFIX}_cutaway_updated_t${t}.png"
+  f="results/${PREFIX}_cutaway_updated${TAG}_t${t}.png"
   if [ -f "$f" ]; then
     echo "file '/workspace/$f'" >> "$CONCAT_LIST"
     echo "duration 0.8" >> "$CONCAT_LIST"
@@ -104,7 +124,7 @@ done
 LAST_LINE=$(tail -2 "$CONCAT_LIST" | head -1)
 echo "$LAST_LINE" >> "$CONCAT_LIST"
 
-VIDEO_OUT="results/${PREFIX}_cutaway_updated_video.mp4"
+VIDEO_OUT="results/${PREFIX}_cutaway_updated${TAG}_video.mp4"
 # -r 10 -vsync cfr (instead of -vsync vfr): the concat demuxer's per-frame
 # "duration" directives alone produce a variable-frame-rate stream -- sparse,
 # irregularly-timed packets with an unpredictable (often single, video-long)
