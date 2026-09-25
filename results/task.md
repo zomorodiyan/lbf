@@ -1005,7 +1005,7 @@ to end through the updated stacking script.
 ### Merge the 4 view scripts into one, selected by a CLI flag
 
 `lateral_screenshot.py`, `lateral_xray.py`, `top_screenshot.py`, and
-`transverse_screenshot.py` merged into `results/render_view.py`, one
+`transverse_screenshot.py` merged into `results/scripts/render_view.py`, one
 `render_<view>()` function each, selected via
 `pvpython render_view.py --view={top,lateral,xray,transverse} <case.foam>
 <time> <output.png> [<output.pvsm>]`. `--view=xray` included despite being a

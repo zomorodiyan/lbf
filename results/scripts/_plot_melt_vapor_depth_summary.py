@@ -13,7 +13,7 @@
 #   docker run --rm -v <repo>:/workspace \
 #     --entrypoint /opt/paraview/bin/pvpython \
 #     kitware/paraview:pv-v5.8.0-osmesa-py3 \
-#     /workspace/results/_plot_melt_vapor_depth_summary.py
+#     /workspace/results/scripts/_plot_melt_vapor_depth_summary.py
 import csv
 import os
 import sys
@@ -31,7 +31,7 @@ if all(os.path.exists(p) for p in _font_paths):
     fm.fontManager.ttflist.extend(fm.createFontList(_font_paths))
     plt.rcParams['font.family'] = 'Liberation Sans'
 
-RESULTS_DIR = '/workspace/results'
+RESULTS_DIR = '/workspace/results/melt_pool_measurements'
 
 # T0-sweep case table, per T0_sweep.md -- testrun69 is the 300K baseline
 # fork (predates the T0 sweep numbering, but is the same fork template at

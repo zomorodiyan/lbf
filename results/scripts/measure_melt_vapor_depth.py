@@ -44,14 +44,14 @@
 # the actual melt pool/depression under the laser.
 #
 # Usage (run via pvpython inside the paraview image, same as render_view.py;
-# prefer the results/measure_melt_vapor_depth.sh wrapper below, which
+# prefer the results/scripts/measure_melt_vapor_depth.sh wrapper below, which
 # resolves a bare case number and launches Docker for you):
 #   docker run --rm -e PYTHONUNBUFFERED=1 -v <repo>:/workspace \
 #     --entrypoint /opt/paraview/bin/pvpython \
 #     kitware/paraview:pv-v5.8.0-osmesa-py3 \
-#     /workspace/results/measure_melt_vapor_depth.py \
-#     /workspace/<case>.foam /workspace/results/<prefix>_melt_vapor_depth.csv \
-#     /workspace/results/<prefix>_melt_vapor_depth.png
+#     /workspace/results/scripts/measure_melt_vapor_depth.py \
+#     /workspace/<case>.foam /workspace/results/melt_pool_measurements/<prefix>_melt_vapor_depth.csv \
+#     /workspace/results/melt_pool_measurements/<prefix>_melt_vapor_depth.png
 import argparse
 import csv
 import os

@@ -280,7 +280,7 @@ Notes:
 
 ---
 
-## Post-processing: synthetic X-ray + normal-render views (`results/render_view.py`)
+## Post-processing: synthetic X-ray + normal-render views (`results/scripts/render_view.py`)
 
 One merged script (`--view=top|lateral|xray|transverse`) renders four different views of the melt
 pool for the VDEP power-sweep cases — it used to be 4 separate scripts (`top_screenshot.py`,
@@ -327,18 +327,18 @@ All four views take the same CLI arguments:
 docker run --rm --user "$(id -u):$(id -g)" -e PYTHONUNBUFFERED=1 -v $(pwd):/workspace \
   --entrypoint /opt/paraview/bin/pvpython \
   kitware/paraview:pv-v5.8.0-osmesa-py3 \
-  /workspace/results/render_view.py --view=xray \
+  /workspace/results/scripts/render_view.py --view=xray \
   /workspace/tutorials/laserbeamFoam/vdep/CASE/CASE.foam <time> /workspace/results/out.png
 ```
 
 **Batch-render every available timestep, stack all four views into one image per timestep, and
 build an mp4:**
 ```bash
-bash results/_render_stacked_video.sh 65
+bash results/scripts/_render_stacked_video.sh 65
 # or a bare VDEP case dir name:
-bash results/_render_stacked_video.sh testrun65_vdep_3_Al
+bash results/scripts/_render_stacked_video.sh testrun65_vdep_3_Al
 # or a path to any other reconstructed case, anywhere in the repo:
-bash results/_render_stacked_video.sh tutorials/laserbeamFoam/plc/testrun12_1_SS316L
+bash results/scripts/_render_stacked_video.sh tutorials/laserbeamFoam/plc/testrun12_1_SS316L
 ```
 Works for any reconstructed case, not just the VDEP power-sweep ones — the bare-number/bare-name
 forms are shorthand for `tutorials/laserbeamFoam/vdep/CASE`; anything containing a `/` is used as a
@@ -386,7 +386,7 @@ apply the matching fix:
     ```
   - If the command doesn't need root (e.g. `ffmpeg`, `ffprobe`) — avoid the problem entirely by
     adding `--user "$(id -u):$(id -g)"` to that `docker run` instead of chowning after the fact.
-    `results/_render_stacked_video.sh` and the `ffmpeg` command in
+    `results/scripts/_render_stacked_video.sh` and the `ffmpeg` command in
     [Making videos from ParaView PNG exports](#making-videos-from-paraview-png-exports) both do
     this already.
 

@@ -16,7 +16,7 @@ before doing any of the following:**
 - Running two cases concurrently — CPU/memory budget guidance
 - Making mp4/mpg videos from PNG exports — `ffmpeg` (bundled in the `lbf3` image) collage/concat commands
 - Building or rebuilding the Docker image — `CACHE_BUST` pattern
-- Post-processing with `results/render_view.py` (`--view=top|lateral|xray|transverse`) — runs in a
+- Post-processing with `results/scripts/render_view.py` (`--view=top|lateral|xray|transverse`) — runs in a
   **different** Docker image (`kitware/paraview:pv-v5.8.0-osmesa-py3`), not `lbf3`; see the
   "Post-processing" section below
 
@@ -49,7 +49,7 @@ lineages at T0=100/200/400/500K instead of the usual 300K) — case dictionaries
   testrun55–57 (mesh-resolution tests) still exist on disk but are outside current focus.
 - `tutorials/laserbeamFoam/plc/` — PLC reference cases (testrun1–29, 316L steel)
 - `tutorials/compressiblelaserbeamFoam/SS316L_Ti64_interface/`, `tutorials/multiComponentlaserbeamFoam/` — multi-material cases (`multicomponentLaserbeamFoam` solver)
-- `results/render_view.py` — merged post-processing script (`--view=top|lateral|xray|transverse`)
+- `results/scripts/render_view.py` — merged post-processing script (`--view=top|lateral|xray|transverse`)
   for the VDEP power-sweep cases; see "Post-processing" below
 
 ## Key facts
@@ -70,9 +70,9 @@ lineages at T0=100/200/400/500K instead of the usual 300K) — case dictionaries
 - Two **separate** Docker images are involved — don't confuse them:
   - `lbf3` — simulations, `reconstructParMesh`/`reconstructPar`, and `ffmpeg` (video assembly).
   - `kitware/paraview:pv-v5.8.0-osmesa-py3` — headless (OSMesa, no GUI) ParaView/pvpython, used
-    only for `results/render_view.py` below. Pull with
+    only for `results/scripts/render_view.py` below. Pull with
     `docker pull kitware/paraview:pv-v5.8.0-osmesa-py3` or let the first `docker run` fetch it.
-- `results/render_view.py --view={top,lateral,xray,transverse}` — one merged script, four views
+- `results/scripts/render_view.py --view={top,lateral,xray,transverse}` — one merged script, four views
   (used to be 4 separate scripts; merged to kill duplicated code — see the script's own header):
   - `top` — top-down normal render, colored by height relative to the nominal surface.
   - `lateral` — normal render of the lateral (through-thickness) view, colored by lateral position.
@@ -85,8 +85,8 @@ lineages at T0=100/200/400/500K instead of the usual 300K) — case dictionaries
     a fixed distance (2.0/1.5/1.0mm, left-to-right) behind the laser's current z position.
   - Invocation: `docker run --rm -e PYTHONUNBUFFERED=1 -v <repo>:/workspace --entrypoint
     /opt/paraview/bin/pvpython kitware/paraview:pv-v5.8.0-osmesa-py3
-    /workspace/results/render_view.py --view=<view> /workspace/<case>.foam <time> <output.png>`.
-- `results/_render_stacked_video.sh <testrun>` (bare number like `64`, or a full case dir name) —
+    /workspace/results/scripts/render_view.py --view=<view> /workspace/<case>.foam <time> <output.png>`.
+- `results/scripts/_render_stacked_video.sh <testrun>` (bare number like `64`, or a full case dir name) —
   batch-renders every reconstructed timestep through all four views, vstacks them into one image
   per timestep, and builds an mp4. Works for any reconstructed VDEP power-sweep case. Auto-creates
   a `.foam` marker if missing; errors out clearly if the case hasn't been reconstructed.

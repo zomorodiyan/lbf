@@ -33,7 +33,7 @@ post-processing job on the already-reconstructed timestep data, not a rerun:
   `IntegrateVariables` filter does this directly — same functionality as OpenFOAM's own
   `volIntegrate` functionObject, just applied after the fact).
 - Plot total metal volume vs. time.
-- Cross-check any drop against the existing render views (`results/render_view.py`, all four
+- Cross-check any drop against the existing render views (`results/scripts/render_view.py`, all four
   views, or the batch `_render_stacked_video.sh` output already available for testrun64) to see
   whether visible ejecta/spatter near a boundary accounts for it.
 
@@ -41,7 +41,7 @@ post-processing job on the already-reconstructed timestep data, not a rerun:
 ejecta, not silent disappearance. A pass supports the recoil-pressure-is-too-strong hypothesis and
 justifies proceeding with Tasks 2-4 as physically-motivated (not numerics-driven) remedies.
 
-**Result (2026-08-04)** — `results/check_metal_volume_conservation.py`, run against all 77
+**Result (2026-08-04)** — `results/scripts/check_metal_volume_conservation.py`, run against all 77
 reconstructed timesteps of testrun64 (`report/testrun64_metal_volume.csv`,
 `report/testrun64_metal_volume.png`):
 - Net change over the full 100-400µs run: **-0.133%** — essentially fully conserved.
@@ -52,7 +52,7 @@ reconstructed timesteps of testrun64 (`report/testrun64_metal_volume.csv`,
 - This step signature (bounded transient episodes + long no-loss plateaus) is consistent with
   discrete ejecta events (spatter/droplets leaving the domain), not silent numerical mass
   destruction. **Task 1 passes** — supports proceeding with Tasks 2-4.
-- **Visually confirmed** (2026-08-04): rendered `results/render_view.py --view=lateral` at the
+- **Visually confirmed** (2026-08-04): rendered `results/scripts/render_view.py --view=lateral` at the
   window boundaries (`report/tr64_lateral_t*.png`). At t=1.614421e-04s (end of window 1) there is
   a clearly separated droplet sitting above the nominal surface line, connected to the bulk melt
   track by a thin neck. At t=2.798706e-04s (end of window 2) a similar, smaller isolated
@@ -89,7 +89,7 @@ pressure plateaus at ~9.9 atm (vs. 34.6 atm uncapped at the same 4400K). See
 [report/felt_pressure.png](report/felt_pressure.png).
 
 Grounded in testrun64's actual field data (checked directly, t=400µs, 2.8M cells,
-`results/analyze_interface_temperature.py`):
+`results/scripts/analyze_interface_temperature.py`):
 - Bulk metal interior (`alpha.metal`>0.999) never exceeds ~3214K — this cap never touches
   ordinary bulk-liquid physics, regardless of exact value chosen.
 - Interface cells (`0.001<alpha.metal<0.999`) commonly and repeatedly reach 3500-4800K — not a

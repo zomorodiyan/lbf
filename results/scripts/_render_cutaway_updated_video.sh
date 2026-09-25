@@ -15,7 +15,7 @@
 # and would be meaningless (or wrong) on any other case.
 #
 # Usage:
-#   bash results/_render_cutaway_updated_video.sh <case>
+#   bash results/scripts/_render_cutaway_updated_video.sh <case>
 #     <case> is one of:
 #       - a bare number (e.g. "75"), expanded to
 #         tutorials/laserbeamFoam/vdep/testrun75_vdep_3_Al -- shorthand for
@@ -45,7 +45,7 @@ set -euo pipefail
 cd ~/lbf3
 
 if [ $# -lt 1 ]; then
-  echo "Usage: bash results/_render_cutaway_updated_video.sh <case> [z_widen_frac]"
+  echo "Usage: bash results/scripts/_render_cutaway_updated_video.sh <case> [z_widen_frac]"
   echo "  <case> is a bare number (75), a bare VDEP case dir name (testrun75_vdep_3_Al),"
   echo "  or a path to any other reconstructed case."
   echo "  [z_widen_frac] optional, default 0: e.g. 0.3 for 30% more trailing-edge room"
@@ -101,7 +101,7 @@ for t in "${TIMES[@]}"; do
   fi
   echo "[$i/${#TIMES[@]}] t=$t"
   docker run --rm --user "$(id -u):$(id -g)" -e PYTHONUNBUFFERED=1 -v "$(pwd)":/workspace --entrypoint /opt/paraview/bin/pvpython "$IMG" \
-    /workspace/results/render_view.py --view=cutaway \
+    /workspace/results/scripts/render_view.py --view=cutaway \
     --y-min-um=-300 --y-max-um=300 --x-plane-um=-35 --top-crop-frac=0 --supersample=3 --velocity --rays --section-velocity \
     --z-widen-frac="$Z_WIDEN_FRAC" \
     "/workspace/$FOAM_FILE" "$t" "/workspace/$out_png" \

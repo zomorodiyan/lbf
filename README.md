@@ -46,10 +46,10 @@ See [SURFACE_TENSION_STUDY.md](SURFACE_TENSION_STUDY.md) for the 316L surface te
 - `tutorials/laserbeamFoam/laser.pvsm` — ParaView state for melt pool + laser ray visualization
 - `tutorials/laserbeamFoam/fix_vtk_series.py` — repairs `.vtk.series` files after paused/resumed runs
 - `reconstruct_results.sh` — Docker-based reconstruction with multi-case and `--latest` support
-- `results/render_view.py` (`--view=top|lateral|xray|transverse`) — synthetic X-ray and
+- `results/scripts/render_view.py` (`--view=top|lateral|xray|transverse`) — synthetic X-ray and
   normal-render melt pool views for the VDEP power-sweep cases (headless pvpython, see
   TESTRUNS.md's "Post-processing" section for the Docker image and invocation); batch all four
-  views plus mp4 assembly via `results/_render_stacked_video.sh <testrun>`
+  views plus mp4 assembly via `results/scripts/_render_stacked_video.sh <testrun>`
 
 ---
 

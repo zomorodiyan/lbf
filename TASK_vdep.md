@@ -60,7 +60,7 @@ Check with whoever owns a given fork for anything more recent than this table
 
 ## Post-processing: turning reconstructed results into animations
 
-`results/_render_stacked_video.sh` batch-renders every reconstructed timestep of a
+`results/scripts/_render_stacked_video.sh` batch-renders every reconstructed timestep of a
 case into four views (top-down, lateral, synthetic X-ray, transverse), stacks them
 into one image per timestep, and assembles an mp4. Full details, including the exact script
 options and troubleshooting, are in TESTRUNS.md's "Post-processing" and
@@ -73,8 +73,8 @@ options and troubleshooting, are in TESTRUNS.md's "Post-processing" and
      `docker build --build-arg CACHE_BUST=$(date +%s) -t lbf3 .`
    - Pull the second image the script needs (public, not something we build):
      `docker pull kitware/paraview:pv-v5.8.0-osmesa-py3`
-3. Run it: `bash results/_render_stacked_video.sh <testrun-number-or-path>`, e.g.
-   `bash results/_render_stacked_video.sh 65`.
+3. Run it: `bash results/scripts/_render_stacked_video.sh <testrun-number-or-path>`, e.g.
+   `bash results/scripts/_render_stacked_video.sh 65`.
 
 If you hit a `Permission denied` error partway through, it's almost always a
 Docker user-mismatch issue, not a real problem with the data — see TESTRUNS.md's

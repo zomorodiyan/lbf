@@ -58,4 +58,4 @@ seed1 runs to `endTime=100µs` (650W); the fork runs to `endTime=400µs` (750W, 
 ## After each lineage finishes
 
 Reconstruct (`reconstructParMesh` then `reconstructPar`, see TESTRUNS.md) and post-process with
-`results/_render_stacked_video.sh <NN>`, same as the power-sweep forks.
+`results/scripts/_render_stacked_video.sh <NN>`, same as the power-sweep forks.

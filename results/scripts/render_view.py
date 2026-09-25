@@ -37,7 +37,7 @@
 #   docker run --rm -e PYTHONUNBUFFERED=1 -v <repo>:/workspace \
 #     --entrypoint /opt/paraview/bin/pvpython \
 #     kitware/paraview:pv-v5.8.0-osmesa-py3 \
-#     /workspace/results/render_view.py --view={top,lateral,xray,transverse} \
+#     /workspace/results/scripts/render_view.py --view={top,lateral,xray,transverse} \
 #     /workspace/<case.foam> <time> <output.png> [<output.pvsm>]
 #   (<output.pvsm> is accepted but ignored for --view=xray, which never had
 #   a ParaView state to save.)

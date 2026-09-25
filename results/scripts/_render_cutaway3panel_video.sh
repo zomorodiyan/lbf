@@ -7,7 +7,7 @@
 # a given case and assembles the stacked images into an mp4.
 #
 # Usage:
-#   bash results/_render_cutaway3panel_video.sh <case>
+#   bash results/scripts/_render_cutaway3panel_video.sh <case>
 #     <case> is one of:
 #       - a bare number (e.g. "69"), expanded to
 #         tutorials/laserbeamFoam/vdep/testrun69_vdep_3_Al -- shorthand for the
@@ -32,7 +32,7 @@ set -uo pipefail
 cd ~/lbf3
 
 if [ $# -lt 1 ]; then
-  echo "Usage: bash results/_render_cutaway3panel_video.sh <case>"
+  echo "Usage: bash results/scripts/_render_cutaway3panel_video.sh <case>"
   echo "  <case> is a bare number (69), a bare VDEP case dir name (testrun69_vdep_3_Al),"
   echo "  or a path to any other reconstructed case (tutorials/laserbeamFoam/plc/CASE)."
   exit 1
@@ -75,7 +75,7 @@ render_view() {
   local view=$1 time=$2 out=$3 log=$4
   docker run --rm --user "$(id -u):$(id -g)" -e PYTHONUNBUFFERED=1 -v "$(pwd)":/workspace \
     --entrypoint /opt/paraview/bin/pvpython "$PARAVIEW_IMG" \
-    /workspace/results/render_view.py --view="$view" "/workspace/$FOAM_FILE" "$time" "/workspace/$out" \
+    /workspace/results/scripts/render_view.py --view="$view" "/workspace/$FOAM_FILE" "$time" "/workspace/$out" \
     > "$log" 2>&1
 }
 
@@ -102,7 +102,7 @@ for t in "${TIMES[@]}"; do
     || { echo "  xray view FAILED (see /tmp/${PREFIX}_xray_${t}.log)"; continue; }
 
   docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd)":/workspace lbf3 \
-      bash /workspace/results/_stack_cutaway3panel.sh \
+      bash /workspace/results/scripts/_stack_cutaway3panel.sh \
       "$top_png" "$cut_png" "$xray_png" "$stacked_png" "$cut_colorbar" "$t" \
       > "/tmp/${PREFIX}_stack_${t}.log" 2>&1 \
     || { echo "  stacking FAILED (see /tmp/${PREFIX}_stack_${t}.log)"; continue; }

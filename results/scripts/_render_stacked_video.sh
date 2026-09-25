@@ -7,7 +7,7 @@
 # timestep directories directly under the case folder.
 #
 # Usage:
-#   bash results/_render_stacked_video.sh <case>
+#   bash results/scripts/_render_stacked_video.sh <case>
 #     <case> is one of:
 #       - a bare number (e.g. "64"), expanded to
 #         tutorials/laserbeamFoam/vdep/testrun64_vdep_3_Al -- shorthand for the
@@ -19,7 +19,7 @@
 #         tutorials/laserbeamFoam/plc/testrun12_1_SS316L or
 #         /workspace/tutorials/compressiblelaserbeamFoam/SS316L_Ti64_interface
 #
-# Drives results/render_view.py (--view=top/lateral/xray/transverse) --
+# Drives results/scripts/render_view.py (--view=top/lateral/xray/transverse) --
 # formerly 4 separate scripts, merged into one (see that file's own header).
 # Each view's own output is a fixed size on every timestep (render_top's
 # and render_lateral's ViewSize come from fixed constants, not content --
@@ -57,7 +57,7 @@ set -euo pipefail
 cd ~/lbf3
 
 if [ $# -lt 1 ]; then
-  echo "Usage: bash results/_render_stacked_video.sh <case>"
+  echo "Usage: bash results/scripts/_render_stacked_video.sh <case>"
   echo "  <case> is a bare number (64), a bare VDEP case dir name (testrun64_vdep_3_Al),"
   echo "  or a path to any other reconstructed case (tutorials/laserbeamFoam/plc/CASE)."
   exit 1
@@ -107,22 +107,22 @@ for t in "${TIMES[@]}"; do
 
   docker run --rm --user "$(id -u):$(id -g)" -e PYTHONUNBUFFERED=1 -v "$(pwd)":/workspace --entrypoint /opt/paraview/bin/pvpython \
     kitware/paraview:pv-v5.8.0-osmesa-py3 \
-    /workspace/results/render_view.py --view=top "/workspace/$FOAM_FILE" "$t" "/workspace/$top_png" \
+    /workspace/results/scripts/render_view.py --view=top "/workspace/$FOAM_FILE" "$t" "/workspace/$top_png" \
     > /tmp/stackvid_top_${PREFIX}_${t}.log 2>&1 || { echo "  top view FAILED (see /tmp/stackvid_top_${PREFIX}_${t}.log)"; continue; }
 
   docker run --rm --user "$(id -u):$(id -g)" -e PYTHONUNBUFFERED=1 -v "$(pwd)":/workspace --entrypoint /opt/paraview/bin/pvpython \
     kitware/paraview:pv-v5.8.0-osmesa-py3 \
-    /workspace/results/render_view.py --view=lateral "/workspace/$FOAM_FILE" "$t" "/workspace/$lat_png" \
+    /workspace/results/scripts/render_view.py --view=lateral "/workspace/$FOAM_FILE" "$t" "/workspace/$lat_png" \
     > /tmp/stackvid_lat_${PREFIX}_${t}.log 2>&1 || { echo "  lateral screenshot FAILED (see /tmp/stackvid_lat_${PREFIX}_${t}.log)"; continue; }
 
   docker run --rm --user "$(id -u):$(id -g)" -e PYTHONUNBUFFERED=1 -v "$(pwd)":/workspace --entrypoint /opt/paraview/bin/pvpython \
     kitware/paraview:pv-v5.8.0-osmesa-py3 \
-    /workspace/results/render_view.py --view=xray "/workspace/$FOAM_FILE" "$t" "/workspace/$xray_png" \
+    /workspace/results/scripts/render_view.py --view=xray "/workspace/$FOAM_FILE" "$t" "/workspace/$xray_png" \
     > /tmp/stackvid_xray_${PREFIX}_${t}.log 2>&1 || { echo "  lateral X-ray FAILED (see /tmp/stackvid_xray_${PREFIX}_${t}.log)"; continue; }
 
   docker run --rm --user "$(id -u):$(id -g)" -e PYTHONUNBUFFERED=1 -v "$(pwd)":/workspace --entrypoint /opt/paraview/bin/pvpython \
     kitware/paraview:pv-v5.8.0-osmesa-py3 \
-    /workspace/results/render_view.py --view=transverse "/workspace/$FOAM_FILE" "$t" "/workspace/$trans_png" \
+    /workspace/results/scripts/render_view.py --view=transverse "/workspace/$FOAM_FILE" "$t" "/workspace/$trans_png" \
     > /tmp/stackvid_trans_${PREFIX}_${t}.log 2>&1 || { echo "  transverse view FAILED (see /tmp/stackvid_trans_${PREFIX}_${t}.log)"; continue; }
 
   # Order: top, transverse, lateral, xray. Colorbars are embedded inside

@@ -95,7 +95,7 @@ Only the 400 K and 500 K lineages remain:
    per TASK_vdep.md's concurrency guidance (severe slowdown beyond that).
 2. Hand off each seed0 → its own seed1 (testrun79→80, 82→83), run seed1.
 3. Hand off each seed1 → its own fork (testrun80→81, 83→84), run the fork to `endTime=400µs`.
-4. Reconstruct and post-process with `results/_render_stacked_video.sh <NN>`, same as the power
+4. Reconstruct and post-process with `results/scripts/_render_stacked_video.sh <NN>`, same as the power
    sweep and the completed 100 K/200 K lineages.
 
 Ask the user (Mehrdad) before launching any of the above — this doc only covers what was prepared,

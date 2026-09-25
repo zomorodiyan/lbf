@@ -26,17 +26,17 @@
 #     own header comment for why this matters.
 #
 # Usage (N >= 2 video/label pairs, top to bottom):
-#   bash results/_build_cutaway_updated_collage.sh <output.mp4> \
+#   bash results/scripts/_build_cutaway_updated_collage.sh <output.mp4> \
 #     <video_1> <label_1> [<video_2> <label_2> ...]
 #
 # Example (Zixun's 500K-over-400K comparison):
-#   bash results/_build_cutaway_updated_collage.sh \
+#   bash results/scripts/_build_cutaway_updated_collage.sh \
 #     results/T0_comparison/collage_500_400.mp4 \
 #     results/testrun84_vdep_3_Al_cutaway_updated_video.mp4 "testrun84 (T0=500K)" \
 #     results/testrun81_vdep_3_Al_cutaway_updated_video.mp4 "testrun81 (T0=400K)"
 #
 # Example (this session's 3-way T0=100/200/300K collage):
-#   bash results/_build_cutaway_updated_collage.sh \
+#   bash results/scripts/_build_cutaway_updated_collage.sh \
 #     results/T0_comparison/cutaway_updated_collage_tr69_tr75_tr78.mp4 \
 #     results/tr69/cutaway_updated_video.mp4 "testrun69 (T0=300K)" \
 #     results/tr78/cutaway_updated_video.mp4 "testrun78 (T0=200K)" \
@@ -45,7 +45,7 @@ set -euo pipefail
 cd ~/lbf3
 
 if [ $# -lt 5 ] || [ $(( ($# - 1) % 2 )) -ne 0 ]; then
-  echo "Usage: bash results/_build_cutaway_updated_collage.sh <output.mp4> <video_1> <label_1> [<video_2> <label_2> ...]"
+  echo "Usage: bash results/scripts/_build_cutaway_updated_collage.sh <output.mp4> <video_1> <label_1> [<video_2> <label_2> ...]"
   echo "  (at least 2 video/label pairs, in top-to-bottom order)"
   exit 1
 fi
