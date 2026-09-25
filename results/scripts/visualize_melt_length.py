@@ -40,6 +40,7 @@ from vtk.util.numpy_support import vtk_to_numpy  # noqa: E402
 import matplotlib  # noqa: E402
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt  # noqa: E402
+plt.rcParams.update({'font.size': 15, 'axes.labelsize': 16, 'xtick.labelsize': 14, 'ytick.labelsize': 14})
 from matplotlib.collections import LineCollection  # noqa: E402
 import numpy as np  # noqa: E402
 
@@ -144,7 +145,7 @@ def main():
     avail = np.array(sorted(reader.TimestepValues))
 
     n = len(args.times_us)
-    fig, axes = plt.subplots(n, 1, figsize=(11, 3.1 * n), dpi=150, squeeze=False)
+    fig, axes = plt.subplots(n, 1, figsize=(12, 4.0 * n), dpi=150, squeeze=False)
     for ax, t_us in zip(axes[:, 0], args.times_us):
         t = float(avail[np.argmin(abs(avail - t_us * 1e-6))])
         laser_z, P_full, P_all, P_main, fs_segs = extract(reader, laser_table, t, Tm)
@@ -173,9 +174,9 @@ def main():
 
         # extents + arrows
         L_mp = L_all = float('nan')
-        ylo = -120
-        for P, col, name, yarr in ((P_all, '#ef6c00', 'L_all', ylo + 22),
-                                   (P_main, '#1b5e20', 'L_mp', ylo + 50)):
+        ylo = -150
+        for P, col, name, yarr in ((P_all, '#ef6c00', 'L_all', ylo + 30),
+                                   (P_main, '#1b5e20', 'L_mp', ylo + 72)):
             if not len(P):
                 continue
             z0, z1 = (P[:, 2].min() - laser_z) * 1e6, (P[:, 2].max() - laser_z) * 1e6
@@ -188,8 +189,8 @@ def main():
                 ax.axvline(zz, color=col, ls='--', lw=1)
             ax.annotate('', xy=(z0, yarr), xytext=(z1, yarr),
                         arrowprops=dict(arrowstyle='<->', color=col, lw=1.4))
-            ax.text(0.5 * (z0 + z1), yarr - 4, f'{name} = {L:.0f} um',
-                    color=col, ha='center', va='bottom', fontsize=8,
+            ax.text(0.5 * (z0 + z1), yarr - 5, f'{name} = {L:.0f} um',
+                    color=col, ha='center', va='bottom', fontsize=15, fontweight='bold',
                     bbox=dict(fc='white', ec='none', pad=0.5, alpha=0.8))
         print(f"t={t * 1e6:.1f}us  L_mp={L_mp:.1f}um  L_all={L_all:.1f}um  "
               f"laser_z={laser_z * 1e3:.3f}mm")
@@ -197,23 +198,23 @@ def main():
         ax.set_xlim(-1150, 150)
         ax.set_ylim(200, ylo)  # depth increases downward
         ax.set_ylabel('depth below\nsurface (um)')
-        ax.set_title(f't = {t * 1e6:.1f} us', fontsize=9, loc='left')
+        ax.set_title(f't = {t * 1e6:.1f} us', fontsize=16, loc='left', fontweight='bold')
         ax.grid(alpha=0.25)
     axes[-1, 0].set_xlabel('z relative to laser (um)   [scan direction ->]')
     from matplotlib.lines import Line2D
-    dot = dict(marker='o', ls='none', ms=6)
+    dot = dict(marker='o', ls='none', ms=9)
     handles = [
         Line2D([], [], color='#1b5e20', label='connected main pool (L_mp)', **dot),
         Line2D([], [], color='#ef6c00', label='detached pieces (L_all only)', **dot),
         Line2D([], [], color='#9e9e9e', label='isotherm above surface (discarded)', **dot),
         Line2D([], [], color='k', lw=0.8, label='free surface at centerline (x = x_laser)'),
         Line2D([], [], color='#1565c0', ls=':', label='nominal surface (depth cut)'),
-        Line2D([], [], color='#c62828', marker='v', ls='none', ms=7, label='laser'),
+        Line2D([], [], color='#c62828', marker='v', ls='none', ms=10, label='laser'),
     ]
-    fig.legend(handles=handles, loc='upper center', ncol=3, fontsize=8,
-               frameon=False, bbox_to_anchor=(0.5, 1.0))
+    fig.legend(handles=handles, loc='lower center', ncol=3, fontsize=14,
+               frameon=False, bbox_to_anchor=(0.5, 1.0))  # sits above the axes area
     fig.suptitle(f'{os.path.basename(case_dir)}: melt pool length measurement '
-                 f'(T_m = {Tm:.0f} K, lateral projection, all x)', y=1.035, fontsize=10)
+                 f'(T_m = {Tm:.0f} K, lateral projection, all x)', y=1.065, fontsize=17)
     fig.tight_layout()
     fig.savefig(args.output_png, bbox_inches='tight')
     print(f"Saved: {args.output_png}")
