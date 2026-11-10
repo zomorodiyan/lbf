@@ -79,8 +79,11 @@ _font_paths = [os.path.join('/workspace/results/fonts', _f) for _f in (
 # addfont() doesn't exist yet in this image's matplotlib (3.1.1, predates
 # 3.2's addfont) -- createFontList()+ttflist.extend() is that version's
 # own equivalent for registering fonts outside the standard search paths.
-fm.fontManager.ttflist.extend(fm.createFontList(_font_paths))
-plt.rcParams['font.family'] = 'Liberation Sans'
+# Skipped (matplotlib's default font instead) if the files aren't there --
+# they aren't tracked in git, see README_cutaway_collage.md for how to get them.
+if all(os.path.exists(_p) for _p in _font_paths):
+    fm.fontManager.ttflist.extend(fm.createFontList(_font_paths))
+    plt.rcParams['font.family'] = 'Liberation Sans'
 
 import vtk
 from vtk.util.numpy_support import vtk_to_numpy
@@ -127,8 +130,13 @@ FIELD_LS = 'T'                # liquid/solid (mushy-zone) interface source --
                                # its solidus crossing is much
                                # better-conditioned for marching cubes.
 ISO_THRESHOLD = 0.5           # gas/metal isosurface value (alpha_smoothed)
-LS_TSOLIDUS = 840.0           # K -- mushy-zone bounds, per CLAUDE.md's
-LS_TLIQUIDUS = 867.0           # physical parameters (AlSi10Mg)
+LS_TSOLIDUS = 840.0           # K -- mushy-zone bounds. Fallback only:
+LS_TLIQUIDUS = 867.0           # main() overwrites both with the case's own
+                               # metal Tsolidus/Tliquidus from
+                               # constant/transportProperties (see
+                               # _load_mushy_bounds). These old AlSi10Mg
+                               # values were silently used for Al 6061
+                               # cases (855/925 K) before 2026-11-09.
 LS_COLOR = [0.0, 0.0, 0.0]    # flat black for solidus rim/outline curves
 LS_LIQUIDUS_COLOR = [0.6, 0.6, 0.6]  # flat fainter gray for liquidus
                                # rim/outline curves -- same technique as
@@ -224,6 +232,26 @@ def _load_laser_time_vs_position(case_dir):
     )
     table = sorted((float(t), float(x), float(y), float(z)) for t, x, y, z in entries)
     return table
+
+
+def _load_mushy_bounds(case_dir):
+    """(Tsolidus, Tliquidus) in K from the metal{} block of
+    constant/transportProperties, or None if it can't be found. Only the
+    metal block -- the gas block carries dummy Tsolidus/Tliquidus too."""
+    path = os.path.join(case_dir, 'constant', 'transportProperties')
+    try:
+        with open(path) as f:
+            content = re.sub(r'//[^\n]*', '', f.read())
+    except OSError:
+        return None
+    block = re.search(r'\bmetal\s*\{([^}]*)\}', content)
+    if not block:
+        return None
+    sol = re.search(r'\bTsolidus\s+([\d.eE+-]+)\s*;', block.group(1))
+    liq = re.search(r'\bTliquidus\s+([\d.eE+-]+)\s*;', block.group(1))
+    if not (sol and liq):
+        return None
+    return float(sol.group(1)), float(liq.group(1))
 
 
 def _laser_z_at(table, t):
@@ -2380,7 +2408,12 @@ def render_transverse(foam_file, time_value, output_png, output_pvsm):
 def render_cutaway(foam_file, time_value, output_png, output_pvsm, y_min=None, y_max=None, x_plane=None,
                     grid=False, top_crop_frac=0.10, show_velocity=False, supersample=1, dotted_solidus=False,
                     highlights=None, show_rays=False, show_section_velocity=False, color_by_y=False,
-                    z_widen_frac=0.0):
+                    z_widen_frac=0.0, z_min=None, z_max=None):
+    # z_min/z_max: optional override of the shared Z_VIEW_MIN/MAX window (m),
+    # for cases whose scan track sits elsewhere in z (2026-11-09, for the
+    # reusable make_cutaway_collage.py). None preserves existing behavior;
+    # z_widen_frac still applies on top, relative to the overridden window.
+    #
     # color_by_y: color the main gas/metal surface by y-depth (same
     # offset-from-surface scheme as render_top/render_bottom) instead of
     # the default x_coord -- user request, 2026-09-22, so every panel in
@@ -2453,9 +2486,10 @@ def render_cutaway(foam_file, time_value, output_png, output_pvsm, y_min=None, y
         f"x=[{xmin},{xmax}] y=[{ymin},{ymax}] z=[{zmin},{zmax}]")
 
     laser_table = _load_laser_time_vs_position(os.path.dirname(foam_file))
-    z_window_min, z_window_max = Z_VIEW_MIN, Z_VIEW_MAX
+    z_window_min = Z_VIEW_MIN if z_min is None else z_min
+    z_window_max = Z_VIEW_MAX if z_max is None else z_max
     if z_widen_frac:
-        requested_z_window_min = z_window_min - z_widen_frac * (Z_VIEW_MAX - Z_VIEW_MIN)
+        requested_z_window_min = z_window_min - z_widen_frac * (z_window_max - z_window_min)
         # Clamp to the real domain edge (zmin, just computed above from the
         # actual mesh bounds) -- user report, 2026-09-24: an unclamped
         # widen_frac can push the window past where real data actually
@@ -3175,28 +3209,41 @@ def render_cutaway(foam_file, time_value, output_png, output_pvsm, y_min=None, y
     if CROP_FRAC:
         _clip_top_fraction(output_png, CROP_FRAC)
 
-    if grid or show_rays:
-        # SURFACE_Y matches render_top's/main()'s own local constant.
-        # Re-derives the extent this frame was actually rendered at from
-        # the same camera/crop values just used above (view.ViewSize,
-        # view.CameraParallelScale, CROP_FRAC) rather than guessing --
-        # see _add_cutaway_grid's own docstring for why that matters. Shared
-        # between --grid and --rays since both need to place an overlay in
-        # this same physical-coordinate extent (user request, 2026-08-22).
-        SURFACE_Y = 0.2e-3
-        w0, h0 = view.ViewSize
-        cps_y = view.CameraParallelScale       # half-height, world units
-        cps_z = cps_y * (w0 / h0)              # half-width, world units (same aspect ratio)
-        cut = round(h0 * CROP_FRAC)
-        # Pre-crop top/bottom world y (row 0 / row h0-1); cropping removes
-        # rows [0,cut) from the top only, so only the top edge moves.
-        y_top_raw = y_center - cps_y
-        y_bottom_raw = y_center + cps_y
-        y_top_raw_postcrop = y_top_raw + cut * (y_bottom_raw - y_top_raw) / (h0 - 1)
-        z_left_mm, z_right_mm = (z_center - cps_z) * 1e3, (z_center + cps_z) * 1e3
-        y_top_offset_um = (y_top_raw_postcrop - SURFACE_Y) * 1e6
-        y_bottom_offset_um = (y_bottom_raw - SURFACE_Y) * 1e6
+    # SURFACE_Y matches render_top's/main()'s own local constant.
+    # Re-derives the extent this frame was actually rendered at from
+    # the same camera/crop values just used above (view.ViewSize,
+    # view.CameraParallelScale, CROP_FRAC) rather than guessing --
+    # see _add_cutaway_grid's own docstring for why that matters. Shared
+    # between --grid and --rays since both need to place an overlay in
+    # this same physical-coordinate extent (user request, 2026-08-22).
+    SURFACE_Y = 0.2e-3
+    w0, h0 = view.ViewSize
+    cps_y = view.CameraParallelScale       # half-height, world units
+    cps_z = cps_y * (w0 / h0)              # half-width, world units (same aspect ratio)
+    cut = round(h0 * CROP_FRAC)
+    # Pre-crop top/bottom world y (row 0 / row h0-1); cropping removes
+    # rows [0,cut) from the top only, so only the top edge moves.
+    y_top_raw = y_center - cps_y
+    y_bottom_raw = y_center + cps_y
+    y_top_raw_postcrop = y_top_raw + cut * (y_bottom_raw - y_top_raw) / (h0 - 1)
+    z_left_mm, z_right_mm = (z_center - cps_z) * 1e3, (z_center + cps_z) * 1e3
+    y_top_offset_um = (y_top_raw_postcrop - SURFACE_Y) * 1e6
+    y_bottom_offset_um = (y_bottom_raw - SURFACE_Y) * 1e6
 
+    # Sidecar with the physical extent of output_png's own pixel grid
+    # (left/right column = z_left/right_mm, top/bottom row =
+    # y_top/bottom_offset_um from the nominal surface) -- lets
+    # make_cutaway_collage.py crop panels and place region boxes in
+    # physical units without duplicating this function's camera constants.
+    extent_json = os.path.splitext(output_png)[0] + '.extent.json'
+    with open(extent_json, 'w') as f:
+        json.dump(dict(z_left_mm=z_left_mm, z_right_mm=z_right_mm,
+                       y_top_offset_um=y_top_offset_um, y_bottom_offset_um=y_bottom_offset_um,
+                       time_s=time_value, laser_z_mm=laser_z * 1e3,
+                       x_plane_um=CUTAWAY_X_PLANE * 1e6), f, indent=2)
+    log(f"Saved extent: {extent_json}")
+
+    if grid or show_rays:
         if grid:
             _add_cutaway_grid(
                 output_png,
@@ -3828,7 +3875,9 @@ def main():
                               "Repeatable -- one panel can carry several, each its own color. "
                               "Format: z0,z1,y0,y1,color -- z in mm, y as an offset from the "
                               "nominal surface in um (same convention as --y-min-um/--y-max-um), "
-                              "color one of red/white/green.")
+                              "color one of red/white/green/blue/pore2, a '#rrggbb' hex, or black "
+                              "(= exclude: reverts that piece to the plain outline; list it BEFORE "
+                              "the larger box it carves out of).")
     parser.add_argument('--rays', action='store_true',
                          help="cutaway view only: overlay laser ray-tracing segments (dark red, "
                               "0-25%% opacity scaled by each segment's power) from the solver's "
@@ -3845,6 +3894,12 @@ def main():
                               "z, behind the laser -- the leading/laser edge never moves) by this "
                               "fraction of the window's normal width. E.g. 0.3 = 30%% more room for "
                               "a longer trailing melt pool (T0=400K/500K cases). Default 0 (no change).")
+    parser.add_argument('--z-min-mm', type=float, default=None,
+                         help="cutaway view only: override the fixed z-window's lower bound (mm). "
+                              f"Default {Z_VIEW_MIN * 1e3:g}.")
+    parser.add_argument('--z-max-mm', type=float, default=None,
+                         help="cutaway view only: override the fixed z-window's upper bound (mm). "
+                              f"Default {Z_VIEW_MAX * 1e3:g}.")
     parser.add_argument('--half', action='store_true',
                          help="bottom view only: crop to the true centerline (x<0) instead of the "
                               "full X_LATERAL_MIN..MAX width.")
@@ -3862,6 +3917,16 @@ def main():
                               "colorbar overlay -- for a collage where only one panel "
                               "(typically cutaway) carries a shared colorbar.")
     args = parser.parse_args()
+
+    global LS_TSOLIDUS, LS_TLIQUIDUS
+    bounds = _load_mushy_bounds(os.path.dirname(args.case_foam))
+    if bounds:
+        LS_TSOLIDUS, LS_TLIQUIDUS = bounds
+        log(f"Mushy-zone bounds from transportProperties: Tsolidus={LS_TSOLIDUS} K, "
+            f"Tliquidus={LS_TLIQUIDUS} K")
+    else:
+        log(f"WARNING: no metal Tsolidus/Tliquidus found in constant/transportProperties -- "
+            f"falling back to {LS_TSOLIDUS}/{LS_TLIQUIDUS} K")
 
     if args.view == 'top':
         render_top(args.case_foam, args.time, args.output_png, args.output_pvsm,
@@ -3904,10 +3969,16 @@ def main():
         highlights = []
         for spec in args.highlight:
             z0_mm, z1_mm, y0_um, y1_um, color = spec.split(',')
+            if color.startswith('#'):
+                # Any "#rrggbb" hex too, not just the named presets above
+                # (2026-11-09, for make_cutaway_collage.py's per-region colors).
+                rgb = [int(color[i:i + 2], 16) / 255.0 for i in (1, 3, 5)]
+            else:
+                rgb = HIGHLIGHT_COLORS[color]
             highlights.append((
                 float(z0_mm) * 1e-3, float(z1_mm) * 1e-3,
                 SURFACE_Y + float(y0_um) * 1e-6, SURFACE_Y + float(y1_um) * 1e-6,
-                HIGHLIGHT_COLORS[color],
+                rgb,
             ))
         render_cutaway(args.case_foam, args.time, args.output_png, args.output_pvsm,
                         y_min=y_min, y_max=y_max, x_plane=x_plane, grid=args.grid,
@@ -3915,7 +3986,9 @@ def main():
                         supersample=args.supersample, dotted_solidus=args.dotted_solidus,
                         highlights=highlights, show_rays=args.rays,
                         show_section_velocity=args.section_velocity, color_by_y=args.color_y,
-                        z_widen_frac=args.z_widen_frac)
+                        z_widen_frac=args.z_widen_frac,
+                        z_min=args.z_min_mm * 1e-3 if args.z_min_mm is not None else None,
+                        z_max=args.z_max_mm * 1e-3 if args.z_max_mm is not None else None)
     elif args.view == 'xray':
         if args.output_pvsm:
             log("Note: --view=xray never had a ParaView state to save; ignoring output_pvsm arg.")

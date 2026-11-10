@@ -25,16 +25,13 @@
 # solver actually solves for; epsilon1 is a derived near-step function of it
 # and contours poorly).
 #
-# T_m is NOT hardcoded: render_view.py's own LS_TSOLIDUS/LS_TLIQUIDUS
-# constants (840/867 K) are stale leftovers from an earlier AlSi10Mg-era
-# template and do NOT match this repo's actual current material (Al 6061,
-# Tsolidus=855K/Tliquidus=925K, confirmed straight from testrun69's own
-# constant/transportProperties, per CLAUDE.md's physical-parameters section)
-# -- so this script instead parses Tsolidus/Tliquidus directly out of each
-# case's own transportProperties every time, and only ever uses render_view's
-# LS_TSOLIDUS/LIQUIDUS-adjacent constants (FIELD_GM/FIELD_LS/ISO_THRESHOLD,
-# _load_laser_time_vs_position, _laser_z_at) which don't encode a material
-# temperature.
+# T_m is NOT hardcoded: this script parses Tsolidus/Tliquidus directly out
+# of each case's own constant/transportProperties every time (Al 6061:
+# 855/925 K). render_view.py's module-level LS_TSOLIDUS/LS_TLIQUIDUS are
+# only an AlSi10Mg-era fallback (840/867 K) that its own main() overwrites
+# from the case -- importing render_view as a module never runs main(), so
+# those constants are not used here; only FIELD_GM/FIELD_LS/ISO_THRESHOLD,
+# _load_laser_time_vs_position, _laser_z_at are.
 #
 # Both h_mp and d_vd are measured only within a z-window centered on the
 # laser's current position (--z-window-um, default 300um total width) --

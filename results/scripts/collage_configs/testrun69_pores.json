@@ -1,0 +1,84 @@
+// testrun69 (Al 6061, T0=300K) pore-formation collage: protrusion ->
+// contact -> approaching pinch-off -> pinch-off / two pores.
+// Reproduces the figure first built by the one-off _render_collage_panels.sh
+// + _build_cutaway_collage_v1.py (collage_v4: velocity + rays + section flow).
+// Copy this file as the starting point for a new case; see
+// README_cutaway_collage.md for what every key does.
+//
+// Units: z in mm (scan direction), y in um as an offset from the nominal
+// flat surface (negative = above it / gas side, positive = into the metal).
+// "at"/"label_at" positions are axes fractions of the panel: [0,0] =
+// bottom-left corner, [1,1] = top-right.
+{
+  "case": "tutorials/laserbeamFoam/vdep/testrun69_vdep_3_Al",
+  "output_dir": "results/testrun69_cutaway_collage",
+  "name": "testrun69_pores",
+
+  "render": {
+    "x_plane_um": -35,
+    "y_window_um": [-300, 300],
+    "z_window_mm": [1.0, 2.5],
+    "supersample": 3,
+    "velocity": true,
+    "rays": true,
+    "section_velocity": true
+  },
+  "crop_z_mm": [1.5, 2.5],
+  "crop_y_um": [-300, 300],
+  "columns": 2,
+  "time_labels": "relative",
+
+  "panels": [
+    {
+      "time": 0.0002894420577,
+      "regions": [
+        {"box": [1.828, 1.873, 100, 160], "color": "#ffa3dd",
+         "label": "Protrusion", "label_at": [0.18, 0.06]}
+      ],
+      "texts": [
+        {"text": "Substrate", "at": [0.92, 0.06], "color": "white", "ha": "right"},
+        {"text": "Laser direction", "at": [0.714, 0.97], "color": "#222222", "ha": "center", "va": "top"}
+      ]
+    },
+    {
+      "time": 0.0003014420577,
+      "excludes": [
+        [1.738, 1.767, 68, 97],
+        [1.691, 1.720, 76, 105],
+        [1.699, 1.729, 109, 138]
+      ],
+      "regions": [
+        {"box": [1.710, 1.830, 55, 130], "color": "#8ecdf5",
+         "label": "Contact occurs", "label_at": [0.08, 0.06]}
+      ],
+      "texts": [
+        {"text": "Move inward due to liquid filling", "at": [0.08, 0.684], "color": "#555555", "va": "center"}
+      ]
+    },
+    {
+      "time": 0.0003054420577,
+      "excludes": [
+        [1.695, 1.725, 79, 109],
+        [1.700, 1.729, 106, 136]
+      ],
+      "regions": [
+        {"box": [1.712, 1.843, 25, 130], "color": "#ffffff",
+         "label": "Approaching pinch-off", "label_at": [0.52, 0.06], "label_ha": "right"}
+      ],
+      "colorbar": true
+    },
+    {
+      "time": 0.0003503006742,
+      "regions": [
+        {"box": [1.72, 1.84, 60, 135], "color": "#b7f58e",
+         "label": "Pore$_1$", "label_at": [0.13, 0.06]},
+        {"box": [1.987, 2.083, 35, 130], "color": "#ffffff",
+         "label": "Pinch-off", "label_at": [0.72, 0.06], "label_ha": "right"}
+      ],
+      "texts": [
+        {"text": "Pore$_2$", "at": [0.39, 0.06], "color": "#95f58e"}
+      ],
+      "scale_bar_um": 200
+    }
+  ]
+}

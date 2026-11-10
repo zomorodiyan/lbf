@@ -95,7 +95,15 @@ tutorials/laserbeamFoam/vdep/testrun*/*.pvsm
 *.out
 
 # Untracked working directories
-results/
+results/*
+# ...except the shareable cutaway-collage tool and its configs (scripts
+# already tracked under results/ stay tracked regardless of these rules)
+!results/scripts/
+results/scripts/*
+!results/scripts/make_cutaway_collage.py
+!results/scripts/make_cutaway_collage.sh
+!results/scripts/README_cutaway_collage.md
+!results/scripts/collage_configs/
 
 # editor and misc backup files - anywhere
 *~
